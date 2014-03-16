@@ -1,0 +1,6 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android" >
+    <item android:id="@+id/action_rateme"
+          android:title="rateme"
+          android:icon="@drawable/star"
+          android:showAsAction="ifRoom" />
+</menu>

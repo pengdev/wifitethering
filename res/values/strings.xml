@@ -1,0 +1,8 @@
+<resources>
+
+    <string name="app_name">Tethering Shortcut</string>
+    <string name="description">Press button to enter Tethering &amp; portable hotspot settings</string>
+    <string name="button_text">Open Tethering Settings</string>
+    <string name="checkbox_text">direct go to setting page next time</string>
+
+</resources>
