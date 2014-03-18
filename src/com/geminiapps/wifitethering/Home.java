@@ -64,12 +64,18 @@ public class Home extends Activity {
 	}
 
 	@Override
+	protected void onStart() {
+		super.onStart();
+		EasyTracker.getInstance(this).activityStart(this);
+
+	}
+
+	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main_activity);
 		button = (Button) findViewById(R.id.button1);
 		checkbox = (CheckBox) findViewById(R.id.checkBox1);
-		EasyTracker.getInstance(this).activityStart(this);
 
 		// get shared preference setting
 		prefs = this.getSharedPreferences(getApplicationContext()
@@ -145,8 +151,13 @@ public class Home extends Activity {
 			adView.destroy();
 		}
 		super.onDestroy();
-		EasyTracker.getInstance(this).activityStop(this);
 		System.out.println("Home activity destroyed");
+	}
+
+	@Override
+	public void onStop() {
+		super.onStop();
+		EasyTracker.getInstance(this).activityStop(this); // Add this method.
 	}
 
 	@Override
@@ -154,7 +165,7 @@ public class Home extends Activity {
 		if (event.getKeyCode() == KeyEvent.KEYCODE_BACK
 				&& event.getAction() == KeyEvent.ACTION_DOWN) {
 			System.out.println("back pressed");
-
+			finish();
 		}
 		return super.dispatchKeyEvent(event);
 	}
