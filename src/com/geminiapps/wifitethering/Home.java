@@ -1,5 +1,7 @@
 package com.geminiapps.wifitethering;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import com.google.analytics.tracking.android.EasyTracker;
 import com.google.android.gms.ads.AdRequest;
 import com.google.android.gms.ads.AdSize;
@@ -10,7 +12,10 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.net.Uri;
+import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.view.KeyEvent;
 import android.view.Menu;
@@ -21,16 +26,25 @@ import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 public class Home extends Activity {
 	Button button;
 	CheckBox checkbox;
+	Button button2;
+	CheckBox checkbox2;
 	SharedPreferences prefs;
+
+	String ratedKey;
+	String autoRunKey;
+	String usageCountKey;
+	int usagecount = 0;
+	String TAG = "wifitethering";
 
 	private AdView adView;
 	/* Your ad unit id. Replace with your actual ad unit id. */
-	private static final String AD_UNIT_ID = "ca-app-pub-5800761622766190/2875368460";
+	private static final String AD_UNIT_ID = "ca-app-pub-9576274567421261/5644398036";
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
@@ -52,6 +66,9 @@ public class Home extends Activity {
 	}
 
 	private void openRatingPage() {
+		if (usagecount == 20) {
+			prefs.edit().putBoolean(ratedKey, true).commit();
+		}
 		Uri uri = Uri.parse("market://details?id="
 				+ getApplicationContext().getPackageName());
 		Intent goToMarket = new Intent(Intent.ACTION_VIEW, uri);
@@ -77,17 +94,47 @@ public class Home extends Activity {
 		button = (Button) findViewById(R.id.button1);
 		checkbox = (CheckBox) findViewById(R.id.checkBox1);
 
+		button2 = (Button) findViewById(R.id.button2);
+		checkbox2 = (CheckBox) findViewById(R.id.checkBox2);
+
+		TextView text = (TextView) findViewById(R.id.textView1);
+
+		ratedKey = getApplicationContext().getPackageName() + ".israted";
+		autoRunKey = getApplicationContext().getPackageName()
+				+ ".automatestartoption";
+		usageCountKey = getApplicationContext().getPackageName()
+				+ ".usagecount";
+
 		// get shared preference setting
 		prefs = this.getSharedPreferences(getApplicationContext()
 				.getPackageName(), Context.MODE_PRIVATE);
-		final String autoRunKey = getApplicationContext().getPackageName()
-				+ ".automatestart";
 
 		// use a default value using new Date()
-		boolean autostart = prefs.getBoolean(autoRunKey, false);
+		int autostart = prefs.getInt(autoRunKey, 0);
+		usagecount = prefs.getInt(usageCountKey, 0);
+		boolean israted = prefs.getBoolean(ratedKey, false);
+		if (!israted) {
+			if (usagecount == 20) {
+				Toast.makeText(
+						getApplicationContext(),
+						"You have been using our app for some time, please click the star icon above and give us ratings, thanks :)",
+						Toast.LENGTH_LONG).show();
+				text.setTextColor(Color.YELLOW);
+				text.setText("You have been using our app for some time, please click the star icon above and give us ratings, thanks :) \n *This will only show once if you give us rating now");
+				autostart = 0;
+				prefs.edit().putInt(autoRunKey, 0).commit();
+				prefs.edit().putInt(usageCountKey, 0).commit();
+			} else {
+				System.out.println("usage count:" + (usagecount + 1));
+				prefs.edit().putInt(usageCountKey, usagecount + 1).commit();
+			}
+		}
 
-		if (autostart)
+		if (autostart == 1)
 			openTetheringSettings();
+		else if (autostart == 2)
+			tetherWirelessAP();
+
 		// Create an ad.
 		adView = new AdView(this);
 		adView.setAdSize(AdSize.BANNER);
@@ -100,7 +147,11 @@ public class Home extends Activity {
 
 		// Create an ad request. Check logcat output for the hashed device ID to
 		// get test ads on a physical device.
-		AdRequest adRequest = new AdRequest.Builder().build();
+		AdRequest adRequest = new AdRequest.Builder()
+				.addTestDevice(AdRequest.DEVICE_ID_EMULATOR) // 所有模拟器
+				.addTestDevice("1D93C8FC4113388A66A6936BE2F7EE67") // 我的Galaxy
+																	// Nexus测试手机
+				.build();
 
 		// Start loading the ad in the background.
 		adView.loadAd(adRequest);
@@ -110,21 +161,100 @@ public class Home extends Activity {
 			@Override
 			public void onClick(View v) {
 				if (checkbox.isChecked()) {
-					prefs.edit().putBoolean(autoRunKey, true).commit();
+					prefs.edit().putInt(autoRunKey, 1).commit();
 				}
 				openTetheringSettings();
 			}
 
 		});
 
+		button2.setOnClickListener(new OnClickListener() {
+
+			@Override
+			public void onClick(View v) {
+				if (checkbox2.isChecked()) {
+					prefs.edit().putInt(autoRunKey, 2).commit();
+				}
+				tetherWirelessAP();
+			}
+
+		});
+
+	}
+
+	private void tetherWirelessAP() {
+		if (IsWifiApEnabled()) {
+			enableAP(false);
+			Toast.makeText(getApplicationContext(), "Closing Wireless AP",
+					Toast.LENGTH_SHORT).show();
+		} else {
+			enableAP(true);
+			Toast.makeText(getApplicationContext(), "Opening Wireless AP",
+					Toast.LENGTH_SHORT).show();
+		}
+
+		finish();
 	}
 
 	private void openTetheringSettings() {
 		Intent tetherSettings = new Intent();
 		tetherSettings.setClassName("com.android.settings",
 				"com.android.settings.TetherSettings");
-		startActivity(tetherSettings);
-		finish();
+		try {
+			startActivity(tetherSettings);
+			finish();
+		} catch (android.content.ActivityNotFoundException e) {
+			Toast.makeText(getApplicationContext(),
+					"Sorry could not find TetherSettings in your system",
+					Toast.LENGTH_LONG).show();
+		}
+	}
+
+	private void enableAP(boolean enable) {
+		WifiManager wifi_manager = (WifiManager) this
+				.getSystemService(this.WIFI_SERVICE);
+
+		WifiConfiguration wifi_configuration = null;
+		wifi_manager.setWifiEnabled(false);
+
+		try {
+			// USE REFLECTION TO GET METHOD "SetWifiAPEnabled"
+			Method method = wifi_manager.getClass().getMethod(
+					"setWifiApEnabled", WifiConfiguration.class, boolean.class);
+			method.invoke(wifi_manager, wifi_configuration, enable);
+		} catch (NoSuchMethodException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (InvocationTargetException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
+	private boolean IsWifiApEnabled() {
+		boolean isWifiAPEnabled = false;
+		WifiManager wifi = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+		Method[] wmMethods = wifi.getClass().getDeclaredMethods();
+		for (Method method : wmMethods) {
+			if (method.getName().equals("isWifiApEnabled")) {
+				try {
+					isWifiAPEnabled = (Boolean) method.invoke(wifi);
+				} catch (IllegalArgumentException e) {
+					e.printStackTrace();
+				} catch (IllegalAccessException e) {
+					e.printStackTrace();
+				} catch (InvocationTargetException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		return isWifiAPEnabled;
 	}
 
 	@Override

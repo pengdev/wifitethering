@@ -1,8 +1,10 @@
 <resources>
 
     <string name="app_name">Tethering Shortcut</string>
-    <string name="description">Press button to enter Tethering &amp; portable hotspot settings</string>
+    <string name="description">Try the function first before check the box\n* Note: You can reset default settings by clear App data</string>
     <string name="button_text">Open Tethering Settings</string>
+    <string name="button_text_2">Turn On/Off Wireless AP</string>
     <string name="checkbox_text">directly go to setting page next time</string>
+    <string name="checkbox_text_2">  directly trun on/off next time\n* make sure you have already setup a AP first</string>
 
 </resources>

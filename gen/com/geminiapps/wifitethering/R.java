@@ -220,10 +220,12 @@ containing a value of this type.
         public static final int star=0x7f02001d;
     }
     public static final class id {
-        public static final int action_rateme=0x7f05000a;
-        public static final int ad=0x7f050009;
+        public static final int action_rateme=0x7f05000c;
+        public static final int ad=0x7f05000b;
         public static final int button1=0x7f050007;
+        public static final int button2=0x7f050009;
         public static final int checkBox1=0x7f050008;
+        public static final int checkBox2=0x7f05000a;
         public static final int hybrid=0x7f050004;
         public static final int none=0x7f050000;
         public static final int normal=0x7f050001;
@@ -267,7 +269,9 @@ containing a value of this type.
          */
         public static final int auth_client_using_bad_version_title=0x7f060014;
         public static final int button_text=0x7f06001d;
-        public static final int checkbox_text=0x7f06001e;
+        public static final int button_text_2=0x7f06001e;
+        public static final int checkbox_text=0x7f06001f;
+        public static final int checkbox_text_2=0x7f060020;
         /**  Button in confirmation dialog to enable Google Play services.  Clicking it
         will direct user to application settings of Google Play services where they
         can enable it [CHAR LIMIT=40] 
