@@ -2,7 +2,9 @@ package com.geminiapps.wifitethering.domain
 
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.wifi.WifiManager
+import android.os.BatteryManager
 import android.os.Build
 import android.provider.Settings
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -17,6 +19,7 @@ enum class HotspotState { ENABLED, DISABLED, ENABLING, DISABLING, UNKNOWN }
 data class HotspotInfo(
     val state: HotspotState,
     val ssid: String?,
+    val batteryLevel: Int = -1,
 )
 
 @Singleton
@@ -39,7 +42,18 @@ class HotspotManager @Inject constructor(
     fun currentInfo(): HotspotInfo {
         val state = getApState()
         val ssid = if (state == HotspotState.ENABLED) readSsid() else null
-        return HotspotInfo(state = state, ssid = ssid)
+        return HotspotInfo(state = state, ssid = ssid, batteryLevel = getBatteryLevel())
+    }
+
+    fun getBatteryLevel(): Int {
+        val batteryStatus: Intent? = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { ifilter ->
+            context.registerReceiver(null, ifilter)
+        }
+        return batteryStatus?.let { intent ->
+            val level: Int = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale: Int = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            (level * 100 / scale.toFloat()).toInt()
+        } ?: -1
     }
 
     /**

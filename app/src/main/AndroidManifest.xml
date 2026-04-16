@@ -44,6 +44,29 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".widget.HotspotWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.geminiapps.wifitethering.ACTION_TOGGLE_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/hotspot_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".service.HotspotTileService"
+            android:exported="true"
+            android:label="Hotspot Toggle"
+            android:icon="@mipmap/ic_launcher"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"

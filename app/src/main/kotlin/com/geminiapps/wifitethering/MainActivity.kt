@@ -1,5 +1,6 @@
 package com.geminiapps.wifitethering
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +19,7 @@ import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import androidx.compose.runtime.getValue
@@ -44,6 +46,25 @@ class MainActivity : ComponentActivity() {
             )
             WifiTetheringTheme(appTheme = appTheme) {
                 AppNavHost(onRequestUpgrade = { billingManager.launchBillingFlow(this) })
+            }
+        }
+        
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("OPEN_SETTINGS", false) == true) {
+            lifecycleScope.launch {
+                preferencesRepository.isPremium.firstOrNull()?.let {
+                    // If they came from a limit notification, open settings
+                    val hotspotManager = com.geminiapps.wifitethering.domain.HotspotManager(this@MainActivity)
+                    hotspotManager.openTetheringSettings()
+                }
             }
         }
     }

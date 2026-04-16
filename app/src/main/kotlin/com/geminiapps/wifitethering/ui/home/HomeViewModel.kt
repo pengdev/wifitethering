@@ -24,6 +24,11 @@ data class HomeUiState(
     val sessionElapsedSeconds: Long = 0L,
     val isPremium: Boolean = false,
     val showRatingPrompt: Boolean = false,
+    val dataLimitEnabled: Boolean = false,
+    val dataLimitMb: Int = 1000,
+    val batteryLimitEnabled: Boolean = false,
+    val batteryLimitPercent: Int = 20,
+    val currentUsageMb: Int = 0,
 )
 
 @HiltViewModel
@@ -47,12 +52,18 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesRepository.incrementUsageCount()
         }
-        // Observe hotspot state to drive session tracker
+        // Observe hotspot state to drive session tracker and monitoring
         viewModelScope.launch {
             hotspotManager.hotspotInfo.collect { info ->
                 when (info.state) {
-                    HotspotState.ENABLED -> sessionTracker.onHotspotEnabled()
-                    HotspotState.DISABLED -> sessionTracker.onHotspotDisabled()
+                    HotspotState.ENABLED -> {
+                        sessionTracker.onHotspotEnabled()
+                        com.geminiapps.wifitethering.worker.HotspotMonitoringWorker.start(preferencesRepository.context)
+                    }
+                    HotspotState.DISABLED -> {
+                        sessionTracker.onHotspotDisabled()
+                        com.geminiapps.wifitethering.worker.HotspotMonitoringWorker.stop(preferencesRepository.context)
+                    }
                     else -> Unit
                 }
             }
@@ -62,16 +73,19 @@ class HomeViewModel @Inject constructor(
     val uiState: StateFlow<HomeUiState> = combine(
         hotspotManager.hotspotInfo,
         _sessionTick,
-        preferencesRepository.isPremium,
-        preferencesRepository.usageCount,
-        preferencesRepository.hasRated,
-    ) { hotspotInfo, elapsed, isPremium, usageCount, hasRated ->
+        preferencesRepository.userPreferences,
+    ) { hotspotInfo, elapsed, prefs ->
         HomeUiState(
             hotspotInfo = hotspotInfo,
             canToggleProgrammatically = hotspotManager.canToggleProgrammatically(),
             sessionElapsedSeconds = elapsed,
-            isPremium = isPremium,
-            showRatingPrompt = !hasRated && usageCount >= 20,
+            isPremium = prefs.isPremium,
+            showRatingPrompt = !prefs.hasRated && prefs.usageCount >= 20,
+            dataLimitEnabled = prefs.dataLimitEnabled,
+            dataLimitMb = prefs.dataLimitMb,
+            batteryLimitEnabled = prefs.batteryLimitEnabled,
+            batteryLimitPercent = prefs.batteryLimitPercent,
+            currentUsageMb = (elapsed.toDouble() * 0.05).toInt()
         )
     }.stateIn(
         scope = viewModelScope,
@@ -92,6 +106,30 @@ class HomeViewModel @Inject constructor(
     fun onDismissRatingPrompt() {
         viewModelScope.launch {
             preferencesRepository.setHasRated(true)
+        }
+    }
+
+    fun onToggleDataLimit() {
+        viewModelScope.launch {
+            preferencesRepository.setDataLimitEnabled(!uiState.value.dataLimitEnabled)
+        }
+    }
+
+    fun onToggleBatteryLimit() {
+        viewModelScope.launch {
+            preferencesRepository.setBatteryLimitEnabled(!uiState.value.batteryLimitEnabled)
+        }
+    }
+
+    fun updateDataLimit(mb: Int) {
+        viewModelScope.launch {
+            preferencesRepository.setDataLimitMb(mb)
+        }
+    }
+
+    fun updateBatteryLimit(percent: Int) {
+        viewModelScope.launch {
+            preferencesRepository.setBatteryLimitPercent(percent)
         }
     }
 }

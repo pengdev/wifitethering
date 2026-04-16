@@ -216,4 +216,4 @@ com.geminiapps.wifitethering
 - [x] Upgrade / paywall card with feature list
 - [ ] Update Play Store listing description to reflect new features
 - [ ] Test on multiple API levels (21, 26, 30, 33+)
-- [ ] Runtime notification permission request (Android 13+)
+- [x] Runtime notification permission request (Android 13+)

@@ -16,6 +16,7 @@ navigationCompose = "2.8.2"
 billing = "7.0.0"
 playServicesAds = "23.3.0"
 splashscreen = "1.0.1"
+zxing = "3.5.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,6 +47,7 @@ billing = { group = "com.android.billingclient", name = "billing", version.ref =
 billing-ktx = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "billing" }
 play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version.ref = "playServicesAds" }
 androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

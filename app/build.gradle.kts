@@ -51,6 +51,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.splashscreen)
+    implementation(libs.zxing.core)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
