@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
@@ -152,7 +154,11 @@ fun HomeScreen(
                 onRequestUpgrade = onRequestUpgrade
             )
 
-            if (uiState.showRatingPrompt) {
+            if (uiState.showUpgradePrompt) {
+            ContextualUpgradePrompt(onRequestUpgrade = onRequestUpgrade)
+        }
+
+        if (uiState.showRatingPrompt) {
                 RatingPrompt(onDismiss = onDismissRatingPrompt)
             }
         }
@@ -211,11 +217,17 @@ private fun HotspotStatusCard(uiState: HomeUiState, onShareClick: () -> Unit) {
                     tint = color,
                     modifier = Modifier.size(48.dp),
                 )
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = color,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = color,
+                    )
+                    if (uiState.isPremium) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        ProBadge()
+                    }
+                }
                 uiState.hotspotInfo.ssid?.let { ssid ->
                     Text(
                         text = ssid,
@@ -395,7 +407,13 @@ private fun SmartManagementSection(
 
         ManagementCard(
             title = "Battery Protector",
-            info = "Current: ${uiState.hotspotInfo.batteryLevel}% · Alert at ${uiState.batteryLimitPercent}%",
+            info = if (uiState.isPremium) {
+                "Current: ${uiState.hotspotInfo.batteryLevel}% · Alert at ${uiState.batteryLimitPercent}%"
+            } else if (uiState.isTrialActive) {
+                "Free Trial: ${3 - uiState.batteryTrialUsed} sessions left"
+            } else {
+                "Current: ${uiState.hotspotInfo.batteryLevel}% · Premium feature"
+            },
             progress = (uiState.hotspotInfo.batteryLevel.toFloat() / 100).coerceIn(0f, 1f),
             sliderValue = uiState.batteryLimitPercent.toFloat(),
             sliderRange = 5f..50f,
@@ -403,9 +421,55 @@ private fun SmartManagementSection(
             enabled = uiState.batteryLimitEnabled,
             onToggle = onToggleBatteryLimit,
             onSliderChange = { onUpdateBatteryLimit(it.toInt()) },
-            isPremium = uiState.isPremium,
+            isPremium = uiState.isPremium || uiState.isTrialActive,
             onRequestUpgrade = onRequestUpgrade,
         )
+    }
+}
+
+@Composable
+fun ProBadge() {
+    androidx.compose.material3.Surface(
+        color = MaterialTheme.colorScheme.primary,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+    ) {
+        Text(
+            "PRO",
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+    }
+}
+
+@Composable
+fun ContextualUpgradePrompt(onRequestUpgrade: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        onClick = onRequestUpgrade
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Icon(
+                Icons.Default.Star,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Enjoying Smart Hotspot?", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Unlock Battery Protector & Data monitoring to automate your sharing.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
+        }
     }
 }
 

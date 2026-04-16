@@ -25,6 +25,8 @@ data class UserPreferences(
     val dataLimitMb: Int,
     val batteryLimitEnabled: Boolean,
     val batteryLimitPercent: Int,
+    val hotspotOnCount: Int,
+    val batteryTrialSessionsUsed: Int,
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -43,6 +45,8 @@ class PreferencesRepository @Inject constructor(
         val DATA_LIMIT_MB = intPreferencesKey("data_limit_mb")
         val BATTERY_LIMIT_ENABLED = booleanPreferencesKey("battery_limit_enabled")
         val BATTERY_LIMIT_PERCENT = intPreferencesKey("battery_limit_percent")
+        val HOTSPOT_ON_COUNT = intPreferencesKey("hotspot_on_count")
+        val BATTERY_TRIAL_SESSIONS = intPreferencesKey("battery_trial_sessions")
     }
 
     val isPremium: Flow<Boolean> = context.dataStore.data
@@ -77,6 +81,12 @@ class PreferencesRepository @Inject constructor(
     val batteryLimitPercent: Flow<Int> = context.dataStore.data
         .map { it[Keys.BATTERY_LIMIT_PERCENT] ?: 20 }
 
+    val hotspotOnCount: Flow<Int> = context.dataStore.data
+        .map { it[Keys.HOTSPOT_ON_COUNT] ?: 0 }
+
+    val batteryTrialSessionsUsed: Flow<Int> = context.dataStore.data
+        .map { it[Keys.BATTERY_TRIAL_SESSIONS] ?: 0 }
+
     val userPreferences: Flow<UserPreferences> = combine(
         isPremium,
         appTheme,
@@ -86,7 +96,9 @@ class PreferencesRepository @Inject constructor(
         dataLimitEnabled,
         dataLimitMb,
         batteryLimitEnabled,
-        batteryLimitPercent
+        batteryLimitPercent,
+        hotspotOnCount,
+        batteryTrialSessionsUsed,
     ) { args ->
         UserPreferences(
             isPremium = args[0] as Boolean,
@@ -97,7 +109,9 @@ class PreferencesRepository @Inject constructor(
             dataLimitEnabled = args[5] as Boolean,
             dataLimitMb = args[6] as Int,
             batteryLimitEnabled = args[7] as Boolean,
-            batteryLimitPercent = args[8] as Int
+            batteryLimitPercent = args[8] as Int,
+            hotspotOnCount = args[9] as Int,
+            batteryTrialSessionsUsed = args[10] as Int,
         )
     }
 
@@ -137,5 +151,17 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setBatteryLimitPercent(percent: Int) {
         context.dataStore.edit { it[Keys.BATTERY_LIMIT_PERCENT] = percent }
+    }
+
+    suspend fun incrementHotspotOnCount() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.HOTSPOT_ON_COUNT] = (prefs[Keys.HOTSPOT_ON_COUNT] ?: 0) + 1
+        }
+    }
+
+    suspend fun incrementBatteryTrialSessions() {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.BATTERY_TRIAL_SESSIONS] = (prefs[Keys.BATTERY_TRIAL_SESSIONS] ?: 0) + 1
+        }
     }
 }

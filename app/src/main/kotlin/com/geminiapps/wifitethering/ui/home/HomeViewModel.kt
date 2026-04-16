@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -32,7 +33,10 @@ data class HomeUiState(
     val canToggleProgrammatically: Boolean = false,
     val sessionElapsedSeconds: Long = 0L,
     val isPremium: Boolean = false,
+    val isTrialActive: Boolean = false,
+    val batteryTrialUsed: Int = 0,
     val showRatingPrompt: Boolean = false,
+    val showUpgradePrompt: Boolean = false,
     val dataLimitEnabled: Boolean = false,
     val dataLimitMb: Int = 1000,
     val batteryLimitEnabled: Boolean = false,
@@ -90,7 +94,10 @@ class HomeViewModel @Inject constructor(
             canToggleProgrammatically = hotspotManager.canToggleProgrammatically(),
             sessionElapsedSeconds = elapsed,
             isPremium = prefs.isPremium,
+            isTrialActive = !prefs.isPremium && prefs.batteryTrialSessionsUsed < 3,
+            batteryTrialUsed = prefs.batteryTrialSessionsUsed,
             showRatingPrompt = !prefs.hasRated && prefs.usageCount >= 20,
+            showUpgradePrompt = !prefs.isPremium && prefs.hotspotOnCount >= 3 && prefs.hotspotOnCount % 5 == 0,
             dataLimitEnabled = prefs.dataLimitEnabled,
             dataLimitMb = prefs.dataLimitMb,
             batteryLimitEnabled = prefs.batteryLimitEnabled,
@@ -106,7 +113,12 @@ class HomeViewModel @Inject constructor(
     )
 
     fun onToggleOrOpenSettings() {
-        hotspotManager.toggleOrOpenSettings()
+        if (hotspotManager.toggleOrOpenSettings()) {
+            // Programmatic toggle happened (API < 26)
+            viewModelScope.launch {
+                preferencesRepository.incrementHotspotOnCount()
+            }
+        }
     }
 
     fun onOpenSettings() {
@@ -127,6 +139,10 @@ class HomeViewModel @Inject constructor(
 
     fun onToggleBatteryLimit() {
         viewModelScope.launch {
+            val prefs = preferencesRepository.userPreferences.first()
+            if (!prefs.isPremium) {
+                preferencesRepository.incrementBatteryTrialSessions()
+            }
             preferencesRepository.setBatteryLimitEnabled(!uiState.value.batteryLimitEnabled)
         }
     }
