@@ -1,5 +1,6 @@
 package com.geminiapps.wifitethering.service
 
+import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
@@ -55,16 +56,17 @@ class HotspotTileService : TileService() {
         } else {
             // API 26+: Collapse shade and open settings or handle via intent
             val intent = Intent(this, com.geminiapps.wifitethering.MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                // We could add an extra to trigger the settings open immediately
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 putExtra("OPEN_SETTINGS", true)
             }
 
+            val pendingIntent = PendingIntent.getActivity(
+                this, 0, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                // Android 14+ requires specific handling for starting activities from tiles
-                // Note: startActivityAndCollapse(PendingIntent) is the modern way
-                // Simplified for now:
-                startActivityAndCollapse(intent)
+                startActivityAndCollapse(pendingIntent)
             } else {
                 @Suppress("DEPRECATION")
                 startActivityAndCollapse(intent)

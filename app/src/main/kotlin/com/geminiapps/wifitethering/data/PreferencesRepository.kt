@@ -46,7 +46,10 @@ class PreferencesRepository @Inject constructor(
     }
 
     val isPremium: Flow<Boolean> = context.dataStore.data
-        .map { it[Keys.IS_PREMIUM] ?: false }
+        .map { prefs ->
+            if (com.geminiapps.wifitethering.BuildConfig.DEBUG) true
+            else prefs[Keys.IS_PREMIUM] ?: false
+        }
 
     val appTheme: Flow<AppTheme> = context.dataStore.data
         .map { prefs ->
