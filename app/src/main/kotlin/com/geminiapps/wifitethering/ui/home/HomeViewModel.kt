@@ -3,6 +3,7 @@ package com.geminiapps.wifitethering.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.geminiapps.wifitethering.data.PreferencesRepository
+import com.geminiapps.wifitethering.domain.DeviceCapabilities
 import com.geminiapps.wifitethering.domain.HotspotInfo
 import com.geminiapps.wifitethering.domain.HotspotManager
 import com.geminiapps.wifitethering.domain.HotspotState
@@ -20,6 +21,14 @@ import javax.inject.Inject
 
 data class HomeUiState(
     val hotspotInfo: HotspotInfo = HotspotInfo(HotspotState.UNKNOWN, null),
+    val capabilities: DeviceCapabilities = DeviceCapabilities(
+        canToggleProgrammatically = false,
+        canReadSsidAndPassword = false,
+        canEditConfig = false,
+        canScanConnectedDevices = false,
+        canUseTile = false,
+        needsNotificationPermission = false,
+    ),
     val canToggleProgrammatically: Boolean = false,
     val sessionElapsedSeconds: Long = 0L,
     val isPremium: Boolean = false,
@@ -77,6 +86,7 @@ class HomeViewModel @Inject constructor(
     ) { hotspotInfo, elapsed, prefs ->
         HomeUiState(
             hotspotInfo = hotspotInfo,
+            capabilities = hotspotManager.capabilities(),
             canToggleProgrammatically = hotspotManager.canToggleProgrammatically(),
             sessionElapsedSeconds = elapsed,
             isPremium = prefs.isPremium,

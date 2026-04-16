@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -95,6 +98,11 @@ fun SettingsScreen(
                     Text("Hotspot Scheduler")
                 }
                 HorizontalDivider()
+            } else {
+                SectionLabel("Premium Features")
+                LockedFeatureButton(label = "Hotspot Scheduler", onClick = onUpgrade)
+                LockedFeatureButton(label = "Hotspot Configuration", onClick = onUpgrade)
+                HorizontalDivider()
             }
 
             SectionLabel("Appearance")
@@ -125,6 +133,26 @@ private fun SectionLabel(text: String) {
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.primary,
     )
+}
+
+@Composable
+private fun LockedFeatureButton(label: String, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(
+            Icons.Default.Lock,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            label,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 @Composable
@@ -160,6 +188,7 @@ private fun ThemePicker(
         add(AppTheme.DARK to "Dark")
         add(AppTheme.LIGHT to "Light")
         if (isPremium) add(AppTheme.AMOLED to "AMOLED")
+        if (isPremium) add(AppTheme.GLASS to "Glass ✨")
     }
 
     Row(

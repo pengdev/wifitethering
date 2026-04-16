@@ -19,7 +19,21 @@ enum class HotspotState { ENABLED, DISABLED, ENABLING, DISABLING, UNKNOWN }
 data class HotspotInfo(
     val state: HotspotState,
     val ssid: String?,
+    val password: String? = null,
     val batteryLevel: Int = -1,
+)
+
+/**
+ * Describes what this device can actually do based on its API level.
+ * Used to adapt the UI so we only show features that work.
+ */
+data class DeviceCapabilities(
+    val canToggleProgrammatically: Boolean,   // API < 26
+    val canReadSsidAndPassword: Boolean,       // API < 28 (reliable)
+    val canEditConfig: Boolean,                // API < 26
+    val canScanConnectedDevices: Boolean,      // API < 29 (reliable)
+    val canUseTile: Boolean,                   // API >= 24
+    val needsNotificationPermission: Boolean,  // API >= 33
 )
 
 @Singleton
@@ -42,8 +56,18 @@ class HotspotManager @Inject constructor(
     fun currentInfo(): HotspotInfo {
         val state = getApState()
         val ssid = if (state == HotspotState.ENABLED) readSsid() else null
-        return HotspotInfo(state = state, ssid = ssid, batteryLevel = getBatteryLevel())
+        val password = if (state == HotspotState.ENABLED) readPassword() else null
+        return HotspotInfo(state = state, ssid = ssid, password = password, batteryLevel = getBatteryLevel())
     }
+
+    fun capabilities(): DeviceCapabilities = DeviceCapabilities(
+        canToggleProgrammatically = Build.VERSION.SDK_INT < Build.VERSION_CODES.O,
+        canReadSsidAndPassword = Build.VERSION.SDK_INT < Build.VERSION_CODES.P,
+        canEditConfig = Build.VERSION.SDK_INT < Build.VERSION_CODES.O,
+        canScanConnectedDevices = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q,
+        canUseTile = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N,
+        needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
+    )
 
     fun getBatteryLevel(): Int {
         val batteryStatus: Intent? = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { ifilter ->

@@ -20,6 +20,7 @@ import javax.inject.Inject
 sealed interface DevicesUiState {
     data object HotspotOff : DevicesUiState
     data object Loading : DevicesUiState
+    data object ScanUnavailable : DevicesUiState  // API 29+: /proc/net/arp restricted
     data class Success(val devices: List<ConnectedDevice>) : DevicesUiState
 }
 
@@ -40,6 +41,7 @@ class DevicesViewModel @Inject constructor(
         when {
             hotspotInfo.state != HotspotState.ENABLED -> DevicesUiState.HotspotOff
             loading -> DevicesUiState.Loading
+            !deviceScanner.canScanReliably && devices.isEmpty() -> DevicesUiState.ScanUnavailable
             else -> DevicesUiState.Success(devices)
         }
     }.stateIn(

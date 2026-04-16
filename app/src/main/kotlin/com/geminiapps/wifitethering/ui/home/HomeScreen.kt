@@ -55,6 +55,7 @@ import com.geminiapps.wifitethering.ui.ads.BannerAdView
 fun HomeRoute(
     onNavigateToDevices: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onRequestUpgrade: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -69,7 +70,7 @@ fun HomeRoute(
         onToggleBatteryLimit = viewModel::onToggleBatteryLimit,
         onUpdateDataLimit = viewModel::updateDataLimit,
         onUpdateBatteryLimit = viewModel::updateBatteryLimit,
-        onRequestUpgrade = { /* Navigation to billing logic would go here or via AppNavHost */ }
+        onRequestUpgrade = onRequestUpgrade,
     )
 }
 
@@ -164,7 +165,7 @@ fun HomeScreen(
             ) {
                 QrSharingBottomSheet(
                     ssid = uiState.hotspotInfo.ssid ?: "Hotspot",
-                    password = "Your_Password" // In a real app, we'd read this from HotspotManager
+                    password = uiState.hotspotInfo.password,
                 )
             }
         }
@@ -379,23 +380,31 @@ private fun SmartManagementSection(
         }
 
         ManagementCard(
-            title = "Data Limit",
-            info = "${uiState.currentUsageMb} MB / ${uiState.dataLimitMb} MB",
+            title = "Data Cap",
+            info = "Session estimate: ${uiState.currentUsageMb} MB · Limit: ${uiState.dataLimitMb} MB",
             progress = (uiState.currentUsageMb.toFloat() / uiState.dataLimitMb).coerceIn(0f, 1f),
+            sliderValue = uiState.dataLimitMb.toFloat(),
+            sliderRange = 100f..10000f,
+            sliderLabel = { "Limit: ${it.toInt()} MB" },
             enabled = uiState.dataLimitEnabled,
             onToggle = onToggleDataLimit,
+            onSliderChange = { onUpdateDataLimit(it.toInt()) },
             isPremium = uiState.isPremium,
-            onRequestUpgrade = onRequestUpgrade
+            onRequestUpgrade = onRequestUpgrade,
         )
 
         ManagementCard(
             title = "Battery Protector",
-            info = "Current: ${uiState.hotspotInfo.batteryLevel}% · Off at ${uiState.batteryLimitPercent}%",
+            info = "Current: ${uiState.hotspotInfo.batteryLevel}% · Alert at ${uiState.batteryLimitPercent}%",
             progress = (uiState.hotspotInfo.batteryLevel.toFloat() / 100).coerceIn(0f, 1f),
+            sliderValue = uiState.batteryLimitPercent.toFloat(),
+            sliderRange = 5f..50f,
+            sliderLabel = { "Alert at ${it.toInt()}%" },
             enabled = uiState.batteryLimitEnabled,
             onToggle = onToggleBatteryLimit,
+            onSliderChange = { onUpdateBatteryLimit(it.toInt()) },
             isPremium = uiState.isPremium,
-            onRequestUpgrade = onRequestUpgrade
+            onRequestUpgrade = onRequestUpgrade,
         )
     }
 }
@@ -405,8 +414,12 @@ private fun ManagementCard(
     title: String,
     info: String,
     progress: Float,
+    sliderValue: Float,
+    sliderRange: ClosedFloatingPointRange<Float>,
+    sliderLabel: (Float) -> String,
     enabled: Boolean,
     onToggle: () -> Unit,
+    onSliderChange: (Float) -> Unit,
     isPremium: Boolean,
     onRequestUpgrade: () -> Unit,
 ) {
@@ -440,6 +453,26 @@ private fun ManagementCard(
                 modifier = Modifier.fillMaxWidth(),
                 color = if (enabled && isPremium) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
             )
+            if (isPremium) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        sliderLabel(sliderValue),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                androidx.compose.material3.Slider(
+                    value = sliderValue,
+                    onValueChange = onSliderChange,
+                    valueRange = sliderRange,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
+                )
+            }
         }
     }
 }
