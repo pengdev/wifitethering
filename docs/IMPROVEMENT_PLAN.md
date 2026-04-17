@@ -198,21 +198,22 @@ Then use it to drive the UI:
 
 ---
 
-## Phase 7.4 — Premium Theme Excellence
+## Phase 7.4 — Theme
 
-Priority: **Delight — wow factor for screenshots and reviews**
+~~Priority: Delight — wow factor for screenshots and reviews~~
 
-### 7.4.1 Animated gradient for Glass theme
-- Replace static `linearGradient` with animated `Brush` that shifts colors slowly
-- Files: `Theme.kt`
+**Decision (2026-04-17): Removed AMOLED and Glass themes entirely.** The added
+complexity (animated gradient, frosted card borders, CompositionLocal plumbing,
+premium gating) was not worth the maintenance cost for a utility app. Theme
+system is now System / Dark / Light only.
 
-### 7.4.2 Frosted glass cards
-- Use `Modifier.blur()` or `graphicsLayer` for real glassmorphism on cards
-- Files: `Theme.kt`, `HomeScreen.kt`
+- `AppTheme` enum: `SYSTEM`, `DARK`, `LIGHT`
+- `ThemePicker`: 3 plain FilterChip options, no premium gating
+- `UpgradeBottomSheet`: removed "Exclusive Themes" feature row
+- Removed: `MeshGradientBackground`, `LocalIsGlassTheme`, `glassBorder()`, AMOLED
+  color overrides, all animation imports
 
-### 7.4.3 Theme preview in picker
-- Show mini live previews of each theme option in ThemePicker chips
-- Files: `SettingsScreen.kt`
+~~7.4.1~~ ~~7.4.2~~ ~~7.4.3~~ — dropped
 
 ---
 
@@ -223,7 +224,7 @@ Phase 7.1 (Fundamentals)  ──►  Phase 7.2 (Revenue)  ──►  Phase 7.3 (
      │                              │                           │
      ├─ 7.1.1 Billing flow          ├─ 7.2.1 Peek features     ├─ 7.3.1 API-adaptive UI
      ├─ 7.1.2 Limit sliders         ├─ 7.2.2 Contextual upsell ├─ 7.3.2 Conditional mgmt
-     ├─ 7.1.3 Glass theme           ├─ 7.2.3 Free trial        ├─ 7.3.3 LazyColumn
+     ├─ 7.1.3 ~~Glass theme~~       ├─ 7.2.3 Free trial        ├─ 7.3.3 LazyColumn
      ├─ 7.1.4 QR password           └─ 7.2.4 PRO badge         ├─ 7.3.4 Surface scheduler
      ├─ 7.1.5 Data usage                                        ├─ 7.3.5 Welcome sheet
      └─ 7.1.6 Connected devices                                 ├─ 7.3.6 Rating prompt

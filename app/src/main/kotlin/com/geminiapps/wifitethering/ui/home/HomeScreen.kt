@@ -3,6 +3,7 @@ package com.geminiapps.wifitethering.ui.home
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,14 +12,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -73,6 +77,7 @@ fun HomeRoute(
         onUpdateDataLimit = viewModel::updateDataLimit,
         onUpdateBatteryLimit = viewModel::updateBatteryLimit,
         onRequestUpgrade = onRequestUpgrade,
+        onDismissOnboarding = viewModel::onDismissOnboarding,
     )
 }
 
@@ -90,6 +95,7 @@ fun HomeScreen(
     onUpdateDataLimit: (Int) -> Unit,
     onUpdateBatteryLimit: (Int) -> Unit,
     onRequestUpgrade: () -> Unit,
+    onDismissOnboarding: () -> Unit,
 ) {
     var showQrSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
@@ -97,8 +103,16 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Tethering Shortcut") },
+                title = { Text("Smart Hotspot") },
                 actions = {
+                    if (uiState.dataLimitEnabled || uiState.batteryLimitEnabled) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "Monitoring Active",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(end = 8.dp).size(20.dp)
+                        )
+                    }
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -111,56 +125,124 @@ fun HomeScreen(
             }
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp),
+                .padding(paddingValues),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            item {
+                HotspotStatusCard(
+                    uiState = uiState,
+                    onShareClick = { showQrSheet = true }
+                )
+            }
 
-            HotspotStatusCard(
-                uiState = uiState,
-                onShareClick = { showQrSheet = true }
-            )
-
-            MainActionButton(
-                uiState = uiState,
-                onToggleOrOpenSettings = onToggleOrOpenSettings,
-            )
-
-            if (!uiState.canToggleProgrammatically) {
-                OutlinedButton(
-                    onClick = onOpenSettings,
+            item {
+                Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Open Tethering Settings")
+                    SuggestionChip(
+                        onClick = onNavigateToDevices,
+                        label = { Text("Devices") },
+                        icon = { Icon(Icons.Default.Share, null, modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    SuggestionChip(
+                        onClick = onNavigateToSettings,
+                        label = { Text("Schedules") },
+                        icon = { Icon(Icons.Default.DateRange, null, modifier = Modifier.size(16.dp)) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            item {
+                MainActionButton(
+                    uiState = uiState,
+                    onToggleOrOpenSettings = onToggleOrOpenSettings,
+                )
+            }
+
+            if (!uiState.capabilities.canToggleProgrammatically) {
+                item {
+                    OutlinedButton(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("System Tethering Settings")
+                    }
                 }
             }
 
             if (uiState.hotspotInfo.state == HotspotState.ENABLED) {
-                DevicesChip(onNavigateToDevices = onNavigateToDevices)
-                SessionTimerCard(elapsedSeconds = uiState.sessionElapsedSeconds)
+                item {
+                    SessionTimerCard(elapsedSeconds = uiState.sessionElapsedSeconds)
+                }
             }
 
-            SmartManagementSection(
-                uiState = uiState,
-                onToggleDataLimit = onToggleDataLimit,
-                onToggleBatteryLimit = onToggleBatteryLimit,
-                onUpdateDataLimit = onUpdateDataLimit,
-                onUpdateBatteryLimit = onUpdateBatteryLimit,
-                onRequestUpgrade = onRequestUpgrade
-            )
+            if (uiState.hotspotInfo.state == HotspotState.ENABLED || uiState.dataLimitEnabled || uiState.batteryLimitEnabled) {
+                item {
+                    Text(
+                        "Smart Management",
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                item {
+                    ManagementCard(
+                        title = "Data Cap",
+                        info = "Estimated: ~${uiState.currentUsageMb} MB (time-based) · Limit: ${uiState.dataLimitMb} MB",
+                        progress = (uiState.currentUsageMb.toFloat() / uiState.dataLimitMb).coerceIn(0f, 1f),
+                        sliderValue = uiState.dataLimitMb.toFloat(),
+                        sliderRange = 100f..10000f,
+                        sliderLabel = { "Limit: ${it.toInt()} MB" },
+                        enabled = uiState.dataLimitEnabled,
+                        onToggle = onToggleDataLimit,
+                        onSliderChange = { onUpdateDataLimit(it.toInt()) },
+                        isPremium = uiState.isPremium,
+                        onRequestUpgrade = onRequestUpgrade,
+                    )
+                }
+
+                item {
+                    ManagementCard(
+                        title = "Battery Protector",
+                        info = if (uiState.isPremium) {
+                            "Current: ${uiState.hotspotInfo.batteryLevel}% · Alert at ${uiState.batteryLimitPercent}%"
+                        } else if (uiState.isTrialActive) {
+                            "Free Trial: ${3 - uiState.batteryTrialUsed} sessions left"
+                        } else {
+                            "Current: ${uiState.hotspotInfo.batteryLevel}% · Premium feature"
+                        },
+                        progress = (uiState.hotspotInfo.batteryLevel.toFloat() / 100).coerceIn(0f, 1f),
+                        sliderValue = uiState.batteryLimitPercent.toFloat(),
+                        sliderRange = 5f..50f,
+                        sliderLabel = { "Alert at ${it.toInt()}%" },
+                        enabled = uiState.batteryLimitEnabled,
+                        onToggle = onToggleBatteryLimit,
+                        onSliderChange = { onUpdateBatteryLimit(it.toInt()) },
+                        isPremium = uiState.isPremium || uiState.isTrialActive,
+                        onRequestUpgrade = onRequestUpgrade,
+                    )
+                }
+            }
 
             if (uiState.showUpgradePrompt) {
-            ContextualUpgradePrompt(onRequestUpgrade = onRequestUpgrade)
+                item {
+                    ContextualUpgradePrompt(onRequestUpgrade = onRequestUpgrade)
+                }
+            }
+
         }
 
         if (uiState.showRatingPrompt) {
-                RatingPrompt(onDismiss = onDismissRatingPrompt)
-            }
+            RatingPromptDialog(onDismiss = onDismissRatingPrompt)
         }
 
         if (showQrSheet) {
@@ -172,8 +254,13 @@ fun HomeScreen(
                 QrSharingBottomSheet(
                     ssid = uiState.hotspotInfo.ssid ?: "Hotspot",
                     password = uiState.hotspotInfo.password,
+                    canReadPassword = uiState.capabilities.canReadSsidAndPassword
                 )
             }
+        }
+
+        if (uiState.showOnboarding) {
+            WelcomeBottomSheet(onDismiss = onDismissOnboarding)
         }
     }
 }
@@ -185,14 +272,12 @@ private fun HotspotStatusCard(uiState: HomeUiState, onShareClick: () -> Unit) {
         HotspotState.DISABLED -> Triple(Icons.Default.WifiOff, "Hotspot Off", MaterialTheme.colorScheme.onSurfaceVariant)
         HotspotState.ENABLING -> Triple(Icons.Default.Wifi, "Turning On...", MaterialTheme.colorScheme.primary)
         HotspotState.DISABLING -> Triple(Icons.Default.WifiOff, "Turning Off...", MaterialTheme.colorScheme.onSurfaceVariant)
-        HotspotState.UNKNOWN -> Triple(Icons.Default.WifiOff, "Unknown", MaterialTheme.colorScheme.onSurfaceVariant)
+        else -> Triple(Icons.Default.WifiOff, "Unknown", MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             if (uiState.hotspotInfo.state == HotspotState.ENABLED) {
@@ -205,60 +290,39 @@ private fun HotspotStatusCard(uiState: HomeUiState, onShareClick: () -> Unit) {
             }
             
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
+                modifier = Modifier.fillMaxWidth().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = color,
-                    modifier = Modifier.size(48.dp),
-                )
+                Icon(icon, null, tint = color, modifier = Modifier.size(48.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = color,
-                    )
+                    Text(text = label, style = MaterialTheme.typography.headlineMedium, color = color)
                     if (uiState.isPremium) {
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(Modifier.width(8.dp))
                         ProBadge()
                     }
                 }
                 uiState.hotspotInfo.ssid?.let { ssid ->
-                    Text(
-                        text = ssid,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text(ssid, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun QrSharingBottomSheet(ssid: String, password: String?) {
-    val qrBitmap = remember(ssid, password) {
-        QrGenerator.generateWifiQrCode(ssid, password)
-    }
+private fun QrSharingBottomSheet(ssid: String, password: String?, canReadPassword: Boolean) {
+    var manualPassword by remember { mutableStateOf("") }
+    val effectivePassword = if (canReadPassword) password else manualPassword
+    val qrBitmap = remember(ssid, effectivePassword) { QrGenerator.generateWifiQrCode(ssid, effectivePassword) }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 48.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        Text(
-            text = "Scan to Connect",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
+        Text("Scan to Connect", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
         Card(
             modifier = Modifier.size(260.dp),
@@ -266,207 +330,80 @@ private fun QrSharingBottomSheet(ssid: String, password: String?) {
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                if (qrBitmap != null) {
-                    androidx.compose.foundation.Image(
-                        bitmap = qrBitmap.asImageBitmap(),
-                        contentDescription = "QR Code",
-                        modifier = Modifier.fillMaxSize()
-                    )
+                qrBitmap?.let {
+                    androidx.compose.foundation.Image(it.asImageBitmap(), "QR", modifier = Modifier.fillMaxSize())
                 }
             }
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(text = ssid, style = MaterialTheme.typography.titleLarge)
-            Text(
-                text = "Sharing your connection securely",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(ssid, style = MaterialTheme.typography.titleLarge)
+            if (canReadPassword) {
+                Text("Sharing secure connection", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                androidx.compose.material3.OutlinedTextField(
+                    value = manualPassword,
+                    onValueChange = { manualPassword = it },
+                    label = { Text("Enter Hotspot Password") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
 
-        OutlinedButton(
-            onClick = { /* Implement copy logic if needed */ },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
+        OutlinedButton(onClick = { /* Share logic */ }, modifier = Modifier.fillMaxWidth()) {
+            Icon(Icons.Default.Share, null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
             Text("Share Image")
         }
     }
 }
 
 @Composable
-private fun MainActionButton(
-    uiState: HomeUiState,
-    onToggleOrOpenSettings: () -> Unit,
-) {
+private fun MainActionButton(uiState: HomeUiState, onToggleOrOpenSettings: () -> Unit) {
     val isEnabled = uiState.hotspotInfo.state == HotspotState.ENABLED
     val label = when {
-        uiState.canToggleProgrammatically -> if (isEnabled) "Turn Off Hotspot" else "Turn On Hotspot"
+        uiState.capabilities.canToggleProgrammatically -> if (isEnabled) "Turn Off Hotspot" else "Turn On Hotspot"
         else -> if (isEnabled) "Hotspot is Active" else "Enable Hotspot"
     }
 
     Button(
         onClick = onToggleOrOpenSettings,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isEnabled) MaterialTheme.colorScheme.error
-            else MaterialTheme.colorScheme.primary,
-        ),
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = if (isEnabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleLarge,
-        )
-    }
-}
-
-@Composable
-private fun DevicesChip(onNavigateToDevices: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        SuggestionChip(
-            onClick = onNavigateToDevices,
-            label = { Text("View Connected Devices") },
-            icon = { Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(18.dp)) },
-        )
+        Text(label, style = MaterialTheme.typography.titleLarge)
     }
 }
 
 @Composable
 private fun SessionTimerCard(elapsedSeconds: Long) {
-    val hours = elapsedSeconds / 3600
-    val minutes = (elapsedSeconds % 3600) / 60
-    val seconds = elapsedSeconds % 60
-    val timeString = "%02d:%02d:%02d".format(hours, minutes, seconds)
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    val h = elapsedSeconds / 3600
+    val m = (elapsedSeconds % 3600) / 60
+    val s = elapsedSeconds % 60
+    val time = "%02d:%02d:%02d".format(h, m, s)
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("Session time", style = MaterialTheme.typography.bodyMedium)
-            Text(timeString, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Text(time, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
         }
-    }
-}
-
-@Composable
-private fun SmartManagementSection(
-    uiState: HomeUiState,
-    onToggleDataLimit: () -> Unit,
-    onToggleBatteryLimit: () -> Unit,
-    onUpdateDataLimit: (Int) -> Unit,
-    onUpdateBatteryLimit: (Int) -> Unit,
-    onRequestUpgrade: () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                "Smart Management",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            if (!uiState.isPremium) {
-                SuggestionChip(
-                    onClick = onRequestUpgrade,
-                    label = { Text("Premium", style = MaterialTheme.typography.labelSmall) },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(14.dp)) }
-                )
-            }
-        }
-
-        ManagementCard(
-            title = "Data Cap",
-            info = "Session estimate: ${uiState.currentUsageMb} MB · Limit: ${uiState.dataLimitMb} MB",
-            progress = (uiState.currentUsageMb.toFloat() / uiState.dataLimitMb).coerceIn(0f, 1f),
-            sliderValue = uiState.dataLimitMb.toFloat(),
-            sliderRange = 100f..10000f,
-            sliderLabel = { "Limit: ${it.toInt()} MB" },
-            enabled = uiState.dataLimitEnabled,
-            onToggle = onToggleDataLimit,
-            onSliderChange = { onUpdateDataLimit(it.toInt()) },
-            isPremium = uiState.isPremium,
-            onRequestUpgrade = onRequestUpgrade,
-        )
-
-        ManagementCard(
-            title = "Battery Protector",
-            info = if (uiState.isPremium) {
-                "Current: ${uiState.hotspotInfo.batteryLevel}% · Alert at ${uiState.batteryLimitPercent}%"
-            } else if (uiState.isTrialActive) {
-                "Free Trial: ${3 - uiState.batteryTrialUsed} sessions left"
-            } else {
-                "Current: ${uiState.hotspotInfo.batteryLevel}% · Premium feature"
-            },
-            progress = (uiState.hotspotInfo.batteryLevel.toFloat() / 100).coerceIn(0f, 1f),
-            sliderValue = uiState.batteryLimitPercent.toFloat(),
-            sliderRange = 5f..50f,
-            sliderLabel = { "Alert at ${it.toInt()}%" },
-            enabled = uiState.batteryLimitEnabled,
-            onToggle = onToggleBatteryLimit,
-            onSliderChange = { onUpdateBatteryLimit(it.toInt()) },
-            isPremium = uiState.isPremium || uiState.isTrialActive,
-            onRequestUpgrade = onRequestUpgrade,
-        )
     }
 }
 
 @Composable
 fun ProBadge() {
-    androidx.compose.material3.Surface(
-        color = MaterialTheme.colorScheme.primary,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-    ) {
-        Text(
-            "PRO",
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onPrimary
-        )
+    androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.primary, shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)) {
+        Text("PRO", modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
     }
 }
 
 @Composable
 fun ContextualUpgradePrompt(onRequestUpgrade: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-        onClick = onRequestUpgrade
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Icon(
-                Icons.Default.Star,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
-            )
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), onClick = onRequestUpgrade) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Icon(Icons.Default.Star, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text("Enjoying Smart Hotspot?", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Unlock Battery Protector & Data monitoring to automate your sharing.",
-                    style = MaterialTheme.typography.bodySmall
-                )
+                Text("Unlock Battery Protector & Data monitoring to automate your sharing.", style = MaterialTheme.typography.bodySmall)
             }
             Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
         }
@@ -474,99 +411,58 @@ fun ContextualUpgradePrompt(onRequestUpgrade: () -> Unit) {
 }
 
 @Composable
-private fun ManagementCard(
-    title: String,
-    info: String,
-    progress: Float,
-    sliderValue: Float,
-    sliderRange: ClosedFloatingPointRange<Float>,
-    sliderLabel: (Float) -> String,
-    enabled: Boolean,
-    onToggle: () -> Unit,
-    onSliderChange: (Float) -> Unit,
-    isPremium: Boolean,
-    onRequestUpgrade: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        enabled = isPremium,
-        onClick = { if (!isPremium) onRequestUpgrade() },
-        colors = CardDefaults.cardColors(
-            containerColor = if (enabled && isPremium) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
+private fun ManagementCard(title: String, info: String, progress: Float, sliderValue: Float, sliderRange: ClosedFloatingPointRange<Float>, sliderLabel: (Float) -> String, enabled: Boolean, onToggle: () -> Unit, onSliderChange: (Float) -> Unit, isPremium: Boolean, onRequestUpgrade: () -> Unit) {
+    Card(modifier = Modifier.fillMaxWidth(), enabled = isPremium, onClick = { if (!isPremium) onRequestUpgrade() }, colors = CardDefaults.cardColors(containerColor = if (enabled && isPremium) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = { if (isPremium) onToggle() else onRequestUpgrade() },
-                    thumbContent = if (!isPremium) {
-                        @Composable { Icon(Icons.Default.Settings, null, modifier = Modifier.size(12.dp)) }
-                    } else null
-                )
+                Switch(checked = enabled, onCheckedChange = { if (isPremium) onToggle() else onRequestUpgrade() }, thumbContent = if (!isPremium) { { Icon(Icons.Default.Settings, null, modifier = Modifier.size(12.dp)) } } else null)
             }
             Text(info, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            androidx.compose.material3.LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth(),
-                color = if (enabled && isPremium) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-            )
+            androidx.compose.material3.LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = if (enabled && isPremium) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
             if (isPremium) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        sliderLabel(sliderValue),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                androidx.compose.material3.Slider(
-                    value = sliderValue,
-                    onValueChange = onSliderChange,
-                    valueRange = sliderRange,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled,
-                )
+                Text(sliderLabel(sliderValue), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                androidx.compose.material3.Slider(value = sliderValue, onValueChange = onSliderChange, valueRange = sliderRange, modifier = Modifier.fillMaxWidth(), enabled = enabled)
             }
         }
     }
 }
+
 @Composable
-private fun RatingPrompt(onDismiss: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                text = "Enjoying the app?",
-                style = MaterialTheme.typography.titleLarge,
-            )
-            Text(
-                text = "A quick rating helps other users find us and keeps the app free.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                TextButton(onClick = onDismiss) { Text("Not now") }
-                // Actual Play Store rating intent would be triggered here
-                TextButton(onClick = onDismiss) { Text("Rate") }
+private fun RatingPromptDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Enjoying the app?") },
+        text = { Text("A quick rating helps other users find us and keeps the app free.") },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Rate") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Not now") } },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun WelcomeBottomSheet(onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 48.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Icon(Icons.Default.Star, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(64.dp))
+            Text("Welcome to Smart Hotspot!", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+            Text("Discover modern tethering tools designed to automate and protect your mobile sharing.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                FeatureRow(icon = Icons.Default.Wifi, title = "Easy Sharing", desc = "Toggle hotspot or scan QR code to connect instantly.")
+                FeatureRow(icon = Icons.Default.Star, title = "Smart Protection", desc = "Set data caps and battery alerts to stay in control.")
             }
+            Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("Get Started") }
+        }
+    }
+}
+
+@Composable
+private fun FeatureRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, desc: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -106,11 +106,7 @@ fun SettingsScreen(
             }
 
             SectionLabel("Appearance")
-            ThemePicker(
-                currentTheme = uiState.appTheme,
-                isPremium = uiState.isPremium,
-                onSelect = onSetTheme,
-            )
+            ThemePicker(currentTheme = uiState.appTheme, onSelect = onSetTheme)
 
             HorizontalDivider()
             SectionLabel("About")
@@ -148,10 +144,7 @@ private fun LockedFeatureButton(label: String, onClick: () -> Unit) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            label,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -165,7 +158,7 @@ private fun PremiumUpgradeCard(onUpgrade: () -> Unit) {
             Text("Go Premium", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Remove ads, schedule hotspot reminders, edit hotspot name/password, battery-aware alerts, and AMOLED theme.",
+                text = "Remove ads, schedule hotspot reminders, edit hotspot name/password, and battery-aware alerts.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -178,19 +171,12 @@ private fun PremiumUpgradeCard(onUpgrade: () -> Unit) {
 }
 
 @Composable
-private fun ThemePicker(
-    currentTheme: AppTheme,
-    isPremium: Boolean,
-    onSelect: (AppTheme) -> Unit,
-) {
-    val options = buildList {
-        add(AppTheme.SYSTEM to "System")
-        add(AppTheme.DARK to "Dark")
-        add(AppTheme.LIGHT to "Light")
-        if (isPremium) add(AppTheme.AMOLED to "AMOLED")
-        if (isPremium) add(AppTheme.GLASS to "Glass ✨")
-    }
-
+private fun ThemePicker(currentTheme: AppTheme, onSelect: (AppTheme) -> Unit) {
+    val options = listOf(
+        AppTheme.SYSTEM to "System",
+        AppTheme.DARK to "Dark",
+        AppTheme.LIGHT to "Light",
+    )
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

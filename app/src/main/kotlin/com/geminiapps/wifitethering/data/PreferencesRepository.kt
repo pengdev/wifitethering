@@ -27,6 +27,7 @@ data class UserPreferences(
     val batteryLimitPercent: Int,
     val hotspotOnCount: Int,
     val batteryTrialSessionsUsed: Int,
+    val hasSeenOnboarding: Boolean,
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -47,6 +48,7 @@ class PreferencesRepository @Inject constructor(
         val BATTERY_LIMIT_PERCENT = intPreferencesKey("battery_limit_percent")
         val HOTSPOT_ON_COUNT = intPreferencesKey("hotspot_on_count")
         val BATTERY_TRIAL_SESSIONS = intPreferencesKey("battery_trial_sessions")
+        val HAS_SEEN_ONBOARDING = booleanPreferencesKey("has_seen_onboarding")
     }
 
     val isPremium: Flow<Boolean> = context.dataStore.data
@@ -87,6 +89,9 @@ class PreferencesRepository @Inject constructor(
     val batteryTrialSessionsUsed: Flow<Int> = context.dataStore.data
         .map { it[Keys.BATTERY_TRIAL_SESSIONS] ?: 0 }
 
+    val hasSeenOnboarding: Flow<Boolean> = context.dataStore.data
+        .map { it[Keys.HAS_SEEN_ONBOARDING] ?: false }
+
     val userPreferences: Flow<UserPreferences> = combine(
         isPremium,
         appTheme,
@@ -99,6 +104,7 @@ class PreferencesRepository @Inject constructor(
         batteryLimitPercent,
         hotspotOnCount,
         batteryTrialSessionsUsed,
+        hasSeenOnboarding,
     ) { args ->
         UserPreferences(
             isPremium = args[0] as Boolean,
@@ -112,6 +118,7 @@ class PreferencesRepository @Inject constructor(
             batteryLimitPercent = args[8] as Int,
             hotspotOnCount = args[9] as Int,
             batteryTrialSessionsUsed = args[10] as Int,
+            hasSeenOnboarding = args[11] as Boolean,
         )
     }
 
@@ -163,5 +170,9 @@ class PreferencesRepository @Inject constructor(
         context.dataStore.edit { prefs ->
             prefs[Keys.BATTERY_TRIAL_SESSIONS] = (prefs[Keys.BATTERY_TRIAL_SESSIONS] ?: 0) + 1
         }
+    }
+
+    suspend fun setHasSeenOnboarding(value: Boolean) {
+        context.dataStore.edit { it[Keys.HAS_SEEN_ONBOARDING] = value }
     }
 }

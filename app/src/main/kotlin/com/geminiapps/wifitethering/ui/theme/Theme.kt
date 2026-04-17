@@ -6,11 +6,6 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Brush
 
 private val primaryGreen = Color(0xFF00E676)
 private val onPrimary = Color(0xFF003916)
@@ -38,8 +33,7 @@ private val LightColorScheme = lightColorScheme(
     onBackground = Color(0xFF1A1A1A),
 )
 
-// AppTheme choices stored in DataStore
-enum class AppTheme { SYSTEM, DARK, AMOLED, LIGHT, GLASS }
+enum class AppTheme { SYSTEM, DARK, LIGHT }
 
 @Composable
 fun WifiTetheringTheme(
@@ -48,56 +42,13 @@ fun WifiTetheringTheme(
 ) {
     val useDark = when (appTheme) {
         AppTheme.LIGHT -> false
-        AppTheme.DARK, AppTheme.AMOLED, AppTheme.GLASS -> true
+        AppTheme.DARK -> true
         AppTheme.SYSTEM -> isSystemInDarkTheme()
     }
 
-    val colorScheme = if (useDark) {
-        if (appTheme == AppTheme.AMOLED) {
-            DarkColorScheme.copy(background = Color.Black, surface = Color(0xFF0A0A0A))
-        } else if (appTheme == AppTheme.GLASS) {
-            DarkColorScheme.copy(
-                background = Color.Transparent,
-                surface = Color.White.copy(alpha = 0.08f),
-                surfaceVariant = Color.White.copy(alpha = 0.12f),
-                onSurface = Color.White,
-                onSurfaceVariant = Color.White.copy(alpha = 0.7f)
-            )
-        } else {
-            DarkColorScheme
-        }
-    } else {
-        LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography
-    ) {
-        if (appTheme == AppTheme.GLASS) {
-            Box(Modifier.fillMaxSize()) {
-                MeshGradientBackground()
-                content()
-            }
-        } else {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun MeshGradientBackground() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(
-                        Color(0xFF0F2027),
-                        Color(0xFF203A43),
-                        Color(0xFF2C5364)
-                    )
-                )
-            )
+        colorScheme = if (useDark) DarkColorScheme else LightColorScheme,
+        typography = Typography,
+        content = content,
     )
 }

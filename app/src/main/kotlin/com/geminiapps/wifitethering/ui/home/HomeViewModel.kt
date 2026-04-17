@@ -37,6 +37,7 @@ data class HomeUiState(
     val batteryTrialUsed: Int = 0,
     val showRatingPrompt: Boolean = false,
     val showUpgradePrompt: Boolean = false,
+    val showOnboarding: Boolean = false,
     val dataLimitEnabled: Boolean = false,
     val dataLimitMb: Int = 1000,
     val batteryLimitEnabled: Boolean = false,
@@ -54,18 +55,15 @@ class HomeViewModel @Inject constructor(
     private val _sessionTick = MutableStateFlow(0L)
 
     init {
-        // Tick every second to update elapsed session time in UI
         viewModelScope.launch {
             while (true) {
                 delay(1_000)
                 _sessionTick.value = sessionTracker.elapsedSeconds()
             }
         }
-        // Track usage for rating prompt
         viewModelScope.launch {
             preferencesRepository.incrementUsageCount()
         }
-        // Observe hotspot state to drive session tracker and monitoring
         viewModelScope.launch {
             hotspotManager.hotspotInfo.collect { info ->
                 when (info.state) {
@@ -96,8 +94,9 @@ class HomeViewModel @Inject constructor(
             isPremium = prefs.isPremium,
             isTrialActive = !prefs.isPremium && prefs.batteryTrialSessionsUsed < 3,
             batteryTrialUsed = prefs.batteryTrialSessionsUsed,
-            showRatingPrompt = !prefs.hasRated && prefs.usageCount >= 20,
+            showRatingPrompt = !prefs.hasRated && prefs.hotspotOnCount >= 5,
             showUpgradePrompt = !prefs.isPremium && prefs.hotspotOnCount >= 3 && prefs.hotspotOnCount % 5 == 0,
+            showOnboarding = !prefs.hasSeenOnboarding,
             dataLimitEnabled = prefs.dataLimitEnabled,
             dataLimitMb = prefs.dataLimitMb,
             batteryLimitEnabled = prefs.batteryLimitEnabled,
@@ -114,7 +113,6 @@ class HomeViewModel @Inject constructor(
 
     fun onToggleOrOpenSettings() {
         if (hotspotManager.toggleOrOpenSettings()) {
-            // Programmatic toggle happened (API < 26)
             viewModelScope.launch {
                 preferencesRepository.incrementHotspotOnCount()
             }
@@ -128,6 +126,12 @@ class HomeViewModel @Inject constructor(
     fun onDismissRatingPrompt() {
         viewModelScope.launch {
             preferencesRepository.setHasRated(true)
+        }
+    }
+
+    fun onDismissOnboarding() {
+        viewModelScope.launch {
+            preferencesRepository.setHasSeenOnboarding(true)
         }
     }
 

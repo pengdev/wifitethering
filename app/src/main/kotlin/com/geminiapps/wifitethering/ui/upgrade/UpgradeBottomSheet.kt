@@ -15,7 +15,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.BatteryAlert
 import androidx.compose.material.icons.filled.DataUsage
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
@@ -82,7 +81,6 @@ fun UpgradeBottomSheet(
                 UpgradeFeatureRow(Icons.Default.DataUsage, "Data Cap Monitor", "Track and limit data used per session")
                 UpgradeFeatureRow(Icons.Default.Alarm, "Hotspot Scheduler", "Schedule reminders to enable or disable your hotspot")
                 UpgradeFeatureRow(Icons.Default.Settings, "Hotspot Configuration", "Customize your SSID and password (API < 26)")
-                UpgradeFeatureRow(Icons.Default.Palette, "Exclusive Themes", "AMOLED and Glass premium themes")
                 UpgradeFeatureRow(Icons.Default.Star, "Remove Ads", "Clean, ad-free experience")
             }
 
