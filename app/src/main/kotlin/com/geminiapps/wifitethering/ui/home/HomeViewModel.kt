@@ -1,11 +1,7 @@
 package com.geminiapps.wifitethering.ui.home
 
-import android.app.AppOpsManager
-import android.app.usage.NetworkStatsManager
-import android.content.Context
-import android.net.ConnectivityManager
+import android.net.TrafficStats
 import android.os.Build
-import android.os.Process
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.geminiapps.wifitethering.data.PreferencesRepository
@@ -15,14 +11,12 @@ import com.geminiapps.wifitethering.domain.HotspotManager
 import com.geminiapps.wifitethering.domain.HotspotState
 import com.geminiapps.wifitethering.domain.SessionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -50,8 +44,6 @@ data class HomeUiState(
     val batteryLimitEnabled: Boolean = false,
     val batteryLimitPercent: Int = 20,
     val currentUsageMb: Int = 0,
-    val usageIsReal: Boolean = false,          // true when backed by NetworkStatsManager
-    val canEnableRealUsage: Boolean = false,   // true when API 26+ and permission not yet granted
 )
 
 @HiltViewModel
@@ -59,12 +51,18 @@ class HomeViewModel @Inject constructor(
     private val hotspotManager: HotspotManager,
     private val sessionTracker: SessionTracker,
     private val preferencesRepository: PreferencesRepository,
-    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     private val _sessionTick = MutableStateFlow(0L)
     private val _currentUsageMb = MutableStateFlow(0)
-    private val _usageIsReal = MutableStateFlow(false)
+
+    /**
+     * Baseline cumulative bytes at hotspot session start.
+     * TrafficStats.getTotalRxBytes/TxBytes() requires no permission and is
+     * available on all API levels. We capture a baseline when the hotspot turns on
+     * and compute delta each tick. Value of UNSUPPORTED (-1) means unavailable.
+     */
+    private var trafficBaselineBytes: Long = TrafficStats.UNSUPPORTED.toLong()
 
     init {
         viewModelScope.launch {
@@ -81,14 +79,27 @@ class HomeViewModel @Inject constructor(
             hotspotManager.hotspotInfo.collect { info ->
                 when (info.state) {
                     HotspotState.ENABLED -> {
+                        val wasOff = sessionTracker.sessionStartMs.value == null
                         sessionTracker.onHotspotEnabled()
+                        if (wasOff) {
+                            // Capture traffic baseline once at session start
+                            val rx = TrafficStats.getTotalRxBytes()
+                            val tx = TrafficStats.getTotalTxBytes()
+                            trafficBaselineBytes = if (rx == TrafficStats.UNSUPPORTED.toLong()
+                                || tx == TrafficStats.UNSUPPORTED.toLong()
+                            ) {
+                                TrafficStats.UNSUPPORTED.toLong()
+                            } else {
+                                rx + tx
+                            }
+                        }
                         com.geminiapps.wifitethering.worker.HotspotMonitoringWorker.start(preferencesRepository.context)
                     }
                     HotspotState.DISABLED -> {
                         sessionTracker.onHotspotDisabled()
+                        trafficBaselineBytes = TrafficStats.UNSUPPORTED.toLong()
                         com.geminiapps.wifitethering.worker.HotspotMonitoringWorker.stop(preferencesRepository.context)
                         _currentUsageMb.value = 0
-                        _usageIsReal.value = false
                     }
                     else -> Unit
                 }
@@ -97,52 +108,16 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun updateDataUsage() {
-        val startMs = sessionTracker.sessionStartMs.value ?: return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && hasUsageStatsPermission()) {
-            val bytes = queryRealWifiBytesSince(startMs)
-            _currentUsageMb.value = (bytes / (1024 * 1024)).toInt()
-            _usageIsReal.value = true
-        } else {
-            // Time-based estimate: ~0.05 MB/s
-            _currentUsageMb.value = (sessionTracker.elapsedSeconds().toDouble() * 0.05).toInt()
-            _usageIsReal.value = false
-        }
-    }
+        if (sessionTracker.sessionStartMs.value == null) return
+        val baseline = trafficBaselineBytes
+        if (baseline == TrafficStats.UNSUPPORTED.toLong()) return
 
-    private fun hasUsageStatsPermission(): Boolean {
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName,
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName,
-            )
-        }
-        return mode == AppOpsManager.MODE_ALLOWED
-    }
+        val rx = TrafficStats.getTotalRxBytes()
+        val tx = TrafficStats.getTotalTxBytes()
+        if (rx == TrafficStats.UNSUPPORTED.toLong() || tx == TrafficStats.UNSUPPORTED.toLong()) return
 
-    private fun queryRealWifiBytesSince(startMs: Long): Long {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return 0L
-        return try {
-            val nsm = context.getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
-            @Suppress("DEPRECATION")
-            val bucket = nsm.querySummaryForDevice(
-                ConnectivityManager.TYPE_WIFI,
-                null,
-                startMs,
-                System.currentTimeMillis(),
-            )
-            bucket.rxBytes + bucket.txBytes
-        } catch (_: Exception) {
-            0L
-        }
+        val sessionBytes = (rx + tx - baseline).coerceAtLeast(0)
+        _currentUsageMb.value = (sessionBytes / (1024L * 1024L)).toInt()
     }
 
     val uiState: StateFlow<HomeUiState> = combine(
@@ -150,8 +125,7 @@ class HomeViewModel @Inject constructor(
         _sessionTick,
         preferencesRepository.userPreferences,
         _currentUsageMb,
-        _usageIsReal,
-    ) { hotspotInfo, elapsed, prefs, usageMb, usageIsReal ->
+    ) { hotspotInfo, elapsed, prefs, usageMb ->
         HomeUiState(
             hotspotInfo = hotspotInfo,
             capabilities = hotspotManager.capabilities(),
@@ -168,8 +142,6 @@ class HomeViewModel @Inject constructor(
             batteryLimitEnabled = prefs.batteryLimitEnabled,
             batteryLimitPercent = prefs.batteryLimitPercent,
             currentUsageMb = usageMb,
-            usageIsReal = usageIsReal,
-            canEnableRealUsage = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !usageIsReal,
         )
     }.stateIn(
         scope = viewModelScope,
