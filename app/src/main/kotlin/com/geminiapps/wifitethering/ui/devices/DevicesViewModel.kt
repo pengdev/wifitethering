@@ -1,6 +1,5 @@
 package com.geminiapps.wifitethering.ui.devices
 
-import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.geminiapps.wifitethering.data.model.ConnectedDevice
@@ -19,7 +18,7 @@ import javax.inject.Inject
 sealed interface DevicesUiState {
     data object HotspotOff : DevicesUiState
     data object Loading : DevicesUiState
-    data object ScanUnavailable : DevicesUiState  // API 29 only: /proc/net/arp restricted, ip neigh unreliable
+    data object ScanUnavailable : DevicesUiState  // API 29+: /proc/net/arp restricted, ip neigh unreliable
     data class Success(val devices: List<ConnectedDevice>) : DevicesUiState
 }
 
@@ -50,8 +49,6 @@ class DevicesViewModel @Inject constructor(
     )
 
     init {
-        // API 30+: collect TetheringManager callbacks (live updates, no polling)
-        // API <30: collect periodic poll results every 30s
         viewModelScope.launch {
             deviceScanner.deviceFlow().collect { devices ->
                 _devices.value = devices
@@ -61,8 +58,6 @@ class DevicesViewModel @Inject constructor(
     }
 
     fun refresh() {
-        // TetheringManager is event-driven — no manual refresh needed on API 30+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) return
         viewModelScope.launch {
             _isLoading.value = true
             _devices.value = deviceScanner.scanDevices()

@@ -18,12 +18,16 @@ UI does **not** adapt — features that silently fail are still shown.
 | Read password            | ✅ `preSharedKey`            | ⚠️ deprecated          | ⚠️ unreliable        | ❌ removed                 | ❌                         |
 | Set SSID/password        | ✅ `setWifiApConfiguration`  | ❌ blocked             | ❌                   | ❌                         | ❌                         |
 | AP state detection       | ✅ `getWifiApState()`        | ⚠️ reflection          | ⚠️ reflection        | ⚠️ reflection              | ⚠️ reflection              |
+| AP state callback        | ❌                           | ✅ `SoftApCallback`    | ✅                   | ✅                         | ✅                         |
 | Connected devices (ARP)  | ✅ `/proc/net/arp`           | ✅                     | ⚠️ restricted        | ❌ empty on most devices   | ❌ confirmed broken (Pixel 6 Pro, Android 16) |
+| Connected devices (native)| ❌                          | ❌                     | ❌                   | ✅ `TetheringManager`      | ✅ `TetheredClient` list   |
 | Quick Settings Tile      | ❌                           | ✅ `TileService`       | ✅                   | ✅                         | ✅ (PendingIntent required) |
 | Data usage stats         | ❌                           | ✅ `NetworkStatsManager`| ✅                  | ✅ (needs permission)      | ✅                         |
 | Hotspot state callback   | ❌                           | ❌                     | ✅ `onStarted/Stopped`| ✅                        | ✅                         |
 | Exact alarms (Scheduler) | ✅                           | ✅                     | ✅                   | ⚠️ `SCHEDULE_EXACT_ALARM`  | ⚠️ needs permission        |
 | POST_NOTIFICATIONS       | Not required                 | Not required           | Not required         | ✅ runtime permission      | ✅                         |
+| Dynamic colors (M3)      | ❌                           | ❌                     | ❌                   | ✅ `DynamicColors`         | ✅                         |
+| Predictive back gesture  | ❌                           | ❌                     | ❌                   | ✅ `OnBackInvokedCallback` | ✅                         |
 
 ---
 
@@ -217,17 +221,107 @@ system is now System / Dark / Light only.
 
 ---
 
+## Phase 7.5 — Modern Android API Upgrades
+
+Priority: **High value — fixes real breakage and enables native-quality features on API 27-34+**
+
+### ~~7.5.1~~ Replace reflection AP state with `SoftApCallback` — BLOCKED: @SystemApi
+
+The current `getWifiApState()` via reflection is fragile and breaks silently on
+some OEM builds. `WifiManager.registerSoftApCallback()` is the official API and
+provides real-time state + connected client count without reflection.
+
+- Register callback in `HotspotManager` on API 27+; fall back to reflection on older devices
+- `SoftApCallback.onStateChanged()` replaces the polling loop for AP on/off state
+- `SoftApCallback.onNumClientsChanged()` gives a live client count even when full
+  device enumeration is unavailable (useful on API 29+ where ARP is restricted)
+- Files: `HotspotManager.kt`, `HomeViewModel.kt`
+
+### ~~7.5.2~~ Real connected devices via `TetheringManager` — BLOCKED: @SystemApi
+
+`TetheringManager.registerTetheringEventCallback()` with
+`TetheringEventCallback.onClientsChanged()` returns a `Collection<TetheredClient>`
+containing each client's MAC address, hostname, and address type. This is the
+only reliable, non-reflection path on Android 10+.
+
+- On API 30+: use `TetheringManager` as primary scan method
+- On API 29: try `ip neigh` command (existing fallback)
+- On API <29: use `/proc/net/arp` (existing)
+- Remove the `ScanUnavailableState` fallback; it should only show if API <30
+  fallbacks genuinely fail, not as default behavior on modern devices
+- Requires: `ACCESS_NETWORK_STATE` (already held); no new dangerous permissions
+- Files: `DeviceScanner.kt`, `DevicesViewModel.kt`, `DevicesScreen.kt`
+
+### 7.5.3 Real data usage via `NetworkStatsManager` (API 26+)
+
+Replace the `elapsed * 0.05` time proxy with actual bytes from
+`NetworkStatsManager.querySummaryForDevice()` scoped to the hotspot network
+interface. This gives real uploaded/downloaded bytes for the session.
+
+- On API 26+: query `NetworkStatsManager` using `ConnectivityManager` to get
+  the active tethering network interface
+- Requires: `READ_NETWORK_USAGE_HISTORY` (system) OR guide the user to grant
+  `PACKAGE_USAGE_STATS` via Settings deeplink (`ACTION_USAGE_ACCESS_SETTINGS`)
+- If permission not granted: show current "Estimated (time-based)" label with
+  a tappable "Enable real usage stats" link that opens the system settings page
+- On API <26: keep the time-based estimate with disclaimer
+- Files: `HomeViewModel.kt`, `HotspotManager.kt`, `HomeScreen.kt`,
+  `PreferencesRepository.kt`
+
+### 7.5.4 Material You dynamic colors (API 31+)
+
+One-line change in `MainActivity.onCreate()`:
+
+```kotlin
+DynamicColors.applyToActivityIfAvailable(this)
+```
+
+Makes the app adopt the user's wallpaper-derived color palette on Android 12+.
+No additional theme work needed — Material3 handles token mapping automatically.
+Add `com.google.android.material:material` dependency if not already present
+(likely already transitive via Compose Material3).
+
+- Gate with `Build.VERSION.SDK_INT >= Build.VERSION_CODES.S` check inside the
+  call or let `applyToActivityIfAvailable` handle it (it no-ops on older devices)
+- Files: `MainActivity.kt`, `build.gradle.kts` (ensure material dep)
+
+### 7.5.5 Exact alarm permission guidance for Scheduler (API 33+)
+
+The scheduler uses `AlarmManager.setExact()` which requires
+`SCHEDULE_EXACT_ALARM` permission on API 33+. Without it, alarms are
+inexact and may fire up to 15 minutes late — silently.
+
+- Before scheduling, check `AlarmManager.canScheduleExactAlarms()`
+- If false on API 33+: show an inline warning in `SchedulerScreen` with a
+  button that deep-links to `Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM`
+- Do not block the user from creating schedules — just warn them that timing
+  may be approximate until permission is granted
+- Files: `SchedulerScreen.kt`, `SchedulerViewModel.kt`
+
+### 7.5.6 Predictive back gesture (API 33+)
+
+Replace any `onBackPressed()` usage with `OnBackInvokedCallback` registered
+via `OnBackInvokedDispatcher`. For Compose navigation, ensure
+`NavHost` handles back correctly with `predictiveBackProgress` if using
+`androidx.navigation:navigation-compose` 2.7+.
+
+- Audit `MainActivity` and any `BackHandler` composables for deprecated patterns
+- Add `android:enableOnBackInvokedCallback="true"` to `<application>` in manifest
+- Files: `AndroidManifest.xml`, `MainActivity.kt`, any screen with `BackHandler`
+
+---
+
 ## Execution Order
 
 ```
-Phase 7.1 (Fundamentals)  ──►  Phase 7.2 (Revenue)  ──►  Phase 7.3 (UX/API)  ──►  Phase 7.4 (Polish)
-     │                              │                           │
-     ├─ 7.1.1 Billing flow          ├─ 7.2.1 Peek features     ├─ 7.3.1 API-adaptive UI
-     ├─ 7.1.2 Limit sliders         ├─ 7.2.2 Contextual upsell ├─ 7.3.2 Conditional mgmt
-     ├─ 7.1.3 ~~Glass theme~~       ├─ 7.2.3 Free trial        ├─ 7.3.3 LazyColumn
-     ├─ 7.1.4 QR password           └─ 7.2.4 PRO badge         ├─ 7.3.4 Surface scheduler
-     ├─ 7.1.5 Data usage                                        ├─ 7.3.5 Welcome sheet
-     └─ 7.1.6 Connected devices                                 ├─ 7.3.6 Rating prompt
+Phase 7.1 (Fundamentals)  ──►  Phase 7.2 (Revenue)  ──►  Phase 7.3 (UX/API)  ──►  Phase 7.4 (Polish)  ──►  Phase 7.5 (Modern APIs)
+     │                              │                           │                                                │
+     ├─ 7.1.1 Billing flow          ├─ 7.2.1 Peek features     ├─ 7.3.1 API-adaptive UI                        ├─ 7.5.1 SoftApCallback
+     ├─ 7.1.2 Limit sliders         ├─ 7.2.2 Contextual upsell ├─ 7.3.2 Conditional mgmt                       ├─ 7.5.2 TetheringManager devices
+     ├─ 7.1.3 ~~Glass theme~~       ├─ 7.2.3 Free trial        ├─ 7.3.3 LazyColumn                             ├─ 7.5.3 Real data usage
+     ├─ 7.1.4 QR password           └─ 7.2.4 PRO badge         ├─ 7.3.4 Surface scheduler                      ├─ 7.5.4 Material You colors
+     ├─ 7.1.5 Data usage                                        ├─ 7.3.5 Welcome sheet                          ├─ 7.5.5 Exact alarm permission
+     └─ 7.1.6 Connected devices                                 ├─ 7.3.6 Rating prompt                          └─ 7.5.6 Predictive back gesture
                                                                  └─ 7.3.7 Monitor indicator
 ```
 

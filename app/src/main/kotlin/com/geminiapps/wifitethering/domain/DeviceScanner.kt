@@ -2,17 +2,13 @@ package com.geminiapps.wifitethering.domain
 
 import android.content.Context
 import android.os.Build
-import androidx.annotation.RequiresApi
 import com.geminiapps.wifitethering.data.model.ConnectedDevice
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
-import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,55 +18,18 @@ class DeviceScanner @Inject constructor(
 ) {
 
     /**
-     * True when device enumeration is expected to produce reliable results:
-     *  - API < 29: /proc/net/arp is readable
-     *  - API 30+:  TetheringManager.onClientsChanged() is available
-     *  - API 29:   ip neigh often fails on stock Android — unreliable
+     * True when device enumeration is expected to produce reliable results.
+     * /proc/net/arp is readable on API < 29. On API 29+, the file is restricted
+     * and ip neigh often fails on stock Android — not reliable.
+     * Note: android.net.TetheringManager (the proper API 30+ solution) is @SystemApi
+     * and not accessible to regular apps.
      */
-    val canScanReliably: Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-            || Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+    val canScanReliably: Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
 
     /**
-     * A live Flow of connected devices.
-     *  - API 30+: driven by TetheringManager callbacks (real-time, no polling)
-     *  - API <30: polls every 30 seconds via ARP / ip neigh
+     * A live Flow of connected devices, polling every 30 seconds.
      */
-    fun deviceFlow(): Flow<List<ConnectedDevice>> =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            tetheringDeviceFlow()
-        } else {
-            pollDeviceFlow()
-        }
-
-    @RequiresApi(Build.VERSION_CODES.R)
-    private fun tetheringDeviceFlow(): Flow<List<ConnectedDevice>> = callbackFlow {
-        val tetheringManager =
-            context.getSystemService(Context.TETHERING_SERVICE) as android.net.TetheringManager
-
-        val callback = object : android.net.TetheringManager.TetheringEventCallback {
-            override fun onClientsChanged(clients: Collection<android.net.TetheredClient>) {
-                val devices = clients.mapNotNull { client ->
-                    val mac = client.macAddress.toString()
-                    // Prefer non-link-local address so the IP is meaningful
-                    val addressInfo = client.addresses
-                        .firstOrNull { !it.address.isLinkLocalAddress }
-                        ?: client.addresses.firstOrNull()
-                    val ip = addressInfo?.address?.hostAddress ?: return@mapNotNull null
-                    ConnectedDevice(ip = ip, mac = mac, iface = "hotspot")
-                }
-                trySend(devices)
-            }
-        }
-
-        tetheringManager.registerTetheringEventCallback(
-            Executors.newSingleThreadExecutor(),
-            callback,
-        )
-        awaitClose { tetheringManager.unregisterTetheringEventCallback(callback) }
-    }
-
-    private fun pollDeviceFlow(): Flow<List<ConnectedDevice>> = flow {
+    fun deviceFlow(): Flow<List<ConnectedDevice>> = flow {
         while (true) {
             emit(scanDevices())
             delay(30_000)
@@ -78,7 +37,7 @@ class DeviceScanner @Inject constructor(
     }
 
     /**
-     * One-shot scan — used by the poll flow and for manual refresh on API <30.
+     * One-shot scan — used for manual refresh.
      */
     suspend fun scanDevices(): List<ConnectedDevice> = withContext(Dispatchers.IO) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {

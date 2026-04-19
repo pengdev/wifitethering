@@ -36,7 +36,6 @@ data class HomeUiState(
         canScanConnectedDevices = false,
         canUseTile = false,
         needsNotificationPermission = false,
-        canUseSoftApCallback = false,
     ),
     val canToggleProgrammatically: Boolean = false,
     val sessionElapsedSeconds: Long = 0L,
