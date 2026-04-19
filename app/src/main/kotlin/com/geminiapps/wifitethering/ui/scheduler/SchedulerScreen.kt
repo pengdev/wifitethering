@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,7 +44,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
@@ -62,6 +66,7 @@ fun SchedulerRoute(
     viewModel: SchedulerViewModel = hiltViewModel(),
 ) {
     val schedules by viewModel.schedules.collectAsStateWithLifecycle()
+    val canScheduleExactAlarms = viewModel.canScheduleExactAlarms
     val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -83,6 +88,7 @@ fun SchedulerRoute(
 
     SchedulerScreen(
         schedules = schedules,
+        canScheduleExactAlarms = canScheduleExactAlarms,
         onNavigateBack = onNavigateBack,
         onAddSchedule = viewModel::addSchedule,
         onToggleSchedule = viewModel::toggleSchedule,
@@ -94,6 +100,7 @@ fun SchedulerRoute(
 @Composable
 fun SchedulerScreen(
     schedules: List<Schedule>,
+    canScheduleExactAlarms: Boolean,
     onNavigateBack: () -> Unit,
     onAddSchedule: (String, Int, Int, Int, ScheduleAction) -> Unit,
     onToggleSchedule: (Schedule) -> Unit,
@@ -118,7 +125,11 @@ fun SchedulerScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (!canScheduleExactAlarms && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                ExactAlarmWarning()
+            }
+            Box(modifier = Modifier.weight(1f)) {
             if (schedules.isEmpty()) {
                 EmptySchedulerState(modifier = Modifier.align(Alignment.Center))
             } else {
@@ -132,7 +143,8 @@ fun SchedulerScreen(
                     }
                 }
             }
-        }
+            } // end Box
+        } // end Column
     }
 
     if (showAddDialog) {
@@ -143,6 +155,56 @@ fun SchedulerScreen(
                 showAddDialog = false
             }
         )
+    }
+}
+
+@Composable
+private fun ExactAlarmWarning() {
+    val context = LocalContext.current
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                Icons.Default.Warning,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "Alarms may fire late",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+                Text(
+                    "Grant \"Alarms & reminders\" permission for precise scheduling.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
+            }
+            TextButton(
+                onClick = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val intent = Intent(
+                            Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                            Uri.parse("package:${context.packageName}"),
+                        ).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+                        context.startActivity(intent)
+                    }
+                }
+            ) {
+                Text("Fix", color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+        }
     }
 }
 

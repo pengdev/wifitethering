@@ -45,10 +45,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -195,19 +198,44 @@ fun HomeScreen(
                 }
 
                 item {
-                    ManagementCard(
-                        title = "Data Cap",
-                        info = "Estimated: ~${uiState.currentUsageMb} MB (time-based) · Limit: ${uiState.dataLimitMb} MB",
-                        progress = (uiState.currentUsageMb.toFloat() / uiState.dataLimitMb).coerceIn(0f, 1f),
-                        sliderValue = uiState.dataLimitMb.toFloat(),
-                        sliderRange = 100f..10000f,
-                        sliderLabel = { "Limit: ${it.toInt()} MB" },
-                        enabled = uiState.dataLimitEnabled,
-                        onToggle = onToggleDataLimit,
-                        onSliderChange = { onUpdateDataLimit(it.toInt()) },
-                        isPremium = uiState.isPremium,
-                        onRequestUpgrade = onRequestUpgrade,
-                    )
+                    val context = LocalContext.current
+                    val usageInfo = if (uiState.usageIsReal) {
+                        "${uiState.currentUsageMb} MB used · Limit: ${uiState.dataLimitMb} MB"
+                    } else {
+                        "Estimated: ~${uiState.currentUsageMb} MB (time-based) · Limit: ${uiState.dataLimitMb} MB"
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        ManagementCard(
+                            title = "Data Cap",
+                            info = usageInfo,
+                            progress = (uiState.currentUsageMb.toFloat() / uiState.dataLimitMb).coerceIn(0f, 1f),
+                            sliderValue = uiState.dataLimitMb.toFloat(),
+                            sliderRange = 100f..10000f,
+                            sliderLabel = { "Limit: ${it.toInt()} MB" },
+                            enabled = uiState.dataLimitEnabled,
+                            onToggle = onToggleDataLimit,
+                            onSliderChange = { onUpdateDataLimit(it.toInt()) },
+                            isPremium = uiState.isPremium,
+                            onRequestUpgrade = onRequestUpgrade,
+                        )
+                        if (uiState.canEnableRealUsage) {
+                            TextButton(
+                                onClick = {
+                                    context.startActivity(
+                                        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                        }
+                                    )
+                                },
+                                modifier = Modifier.align(Alignment.End),
+                            ) {
+                                Text(
+                                    "Enable real usage stats",
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    }
                 }
 
                 item {

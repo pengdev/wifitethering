@@ -1,36 +1,92 @@
 package com.geminiapps.wifitethering.domain
 
+import android.content.Context
 import android.os.Build
+import androidx.annotation.RequiresApi
 import com.geminiapps.wifitethering.data.model.ConnectedDevice
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class DeviceScanner @Inject constructor() {
+class DeviceScanner @Inject constructor(
+    @ApplicationContext private val context: Context,
+) {
 
     /**
-     * Returns connected devices using a tiered approach based on API level:
-     *  - API < 29: Read /proc/net/arp (reliable)
-     *  - API 29+:  Try `ip neigh` command (works on some devices)
-     *  - Fallback: Returns empty list — caller should show a graceful message
+     * True when device enumeration is expected to produce reliable results:
+     *  - API < 29: /proc/net/arp is readable
+     *  - API 30+:  TetheringManager.onClientsChanged() is available
+     *  - API 29:   ip neigh often fails on stock Android — unreliable
+     */
+    val canScanReliably: Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+            || Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+
+    /**
+     * A live Flow of connected devices.
+     *  - API 30+: driven by TetheringManager callbacks (real-time, no polling)
+     *  - API <30: polls every 30 seconds via ARP / ip neigh
+     */
+    fun deviceFlow(): Flow<List<ConnectedDevice>> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            tetheringDeviceFlow()
+        } else {
+            pollDeviceFlow()
+        }
+
+    @RequiresApi(Build.VERSION_CODES.R)
+    private fun tetheringDeviceFlow(): Flow<List<ConnectedDevice>> = callbackFlow {
+        val tetheringManager =
+            context.getSystemService(Context.TETHERING_SERVICE) as android.net.TetheringManager
+
+        val callback = object : android.net.TetheringManager.TetheringEventCallback {
+            override fun onClientsChanged(clients: Collection<android.net.TetheredClient>) {
+                val devices = clients.mapNotNull { client ->
+                    val mac = client.macAddress.toString()
+                    // Prefer non-link-local address so the IP is meaningful
+                    val addressInfo = client.addresses
+                        .firstOrNull { !it.address.isLinkLocalAddress }
+                        ?: client.addresses.firstOrNull()
+                    val ip = addressInfo?.address?.hostAddress ?: return@mapNotNull null
+                    ConnectedDevice(ip = ip, mac = mac, iface = "hotspot")
+                }
+                trySend(devices)
+            }
+        }
+
+        tetheringManager.registerTetheringEventCallback(
+            Executors.newSingleThreadExecutor(),
+            callback,
+        )
+        awaitClose { tetheringManager.unregisterTetheringEventCallback(callback) }
+    }
+
+    private fun pollDeviceFlow(): Flow<List<ConnectedDevice>> = flow {
+        while (true) {
+            emit(scanDevices())
+            delay(30_000)
+        }
+    }
+
+    /**
+     * One-shot scan — used by the poll flow and for manual refresh on API <30.
      */
     suspend fun scanDevices(): List<ConnectedDevice> = withContext(Dispatchers.IO) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             scanViaArpFile()
         } else {
-            // Try `ip neigh` as a fallback for restricted /proc/net/arp
-            val ipNeighResult = scanViaIpNeigh()
-            ipNeighResult
+            scanViaIpNeigh()
         }
     }
-
-    /**
-     * Returns true if scanning is expected to work on this device.
-     * On API 29+ the result may always be empty.
-     */
-    val canScanReliably: Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
 
     private fun scanViaArpFile(): List<ConnectedDevice> {
         return try {
@@ -67,7 +123,6 @@ class DeviceScanner @Inject constructor() {
                     it.matches(Regex("[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}"))
                 } ?: return@mapNotNull null
                 val state = parts.last()
-                // Skip stale/failed entries
                 if (state == "FAILED" || state == "INCOMPLETE") return@mapNotNull null
                 ConnectedDevice(ip = ip, mac = mac, iface = iface)
             }

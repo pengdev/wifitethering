@@ -1,6 +1,8 @@
 package com.geminiapps.wifitethering.ui.scheduler
 
+import android.app.AlarmManager
 import android.content.Context
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.geminiapps.wifitethering.data.db.ScheduleDao
@@ -25,6 +27,16 @@ class SchedulerViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = emptyList(),
     )
+
+    /**
+     * On API 31+, exact alarms require SCHEDULE_EXACT_ALARM permission.
+     * If false, alarms will fire inexactly (up to ~15 min late).
+     */
+    val canScheduleExactAlarms: Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
+    } else {
+        true
+    }
 
     fun addSchedule(
         label: String,
