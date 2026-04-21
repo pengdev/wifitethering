@@ -92,12 +92,19 @@ class HomeViewModel @Inject constructor(
                             } else {
                                 rx + tx
                             }
+                            // Persist so background worker can compute the same delta
+                            viewModelScope.launch {
+                                preferencesRepository.setTrafficSessionBaseline(trafficBaselineBytes)
+                            }
                         }
                         com.geminiapps.wifitethering.worker.HotspotMonitoringWorker.start(preferencesRepository.context)
                     }
                     HotspotState.DISABLED -> {
                         sessionTracker.onHotspotDisabled()
                         trafficBaselineBytes = TrafficStats.UNSUPPORTED.toLong()
+                        viewModelScope.launch {
+                            preferencesRepository.clearTrafficSessionBaseline()
+                        }
                         com.geminiapps.wifitethering.worker.HotspotMonitoringWorker.stop(preferencesRepository.context)
                         _currentUsageMb.value = 0
                     }

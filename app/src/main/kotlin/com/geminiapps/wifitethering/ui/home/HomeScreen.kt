@@ -145,12 +145,14 @@ fun HomeScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    SuggestionChip(
-                        onClick = onNavigateToDevices,
-                        label = { Text("Devices") },
-                        icon = { Icon(Icons.Default.Share, null, modifier = Modifier.size(16.dp)) },
-                        modifier = Modifier.weight(1f)
-                    )
+                    if (uiState.capabilities.canScanConnectedDevices) {
+                        SuggestionChip(
+                            onClick = onNavigateToDevices,
+                            label = { Text("Devices") },
+                            icon = { Icon(Icons.Default.Share, null, modifier = Modifier.size(16.dp)) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                     SuggestionChip(
                         onClick = onNavigateToSettings,
                         label = { Text("Schedules") },
@@ -252,9 +254,8 @@ fun HomeScreen(
                 containerColor = MaterialTheme.colorScheme.surface,
             ) {
                 QrSharingBottomSheet(
-                    ssid = uiState.hotspotInfo.ssid ?: "Hotspot",
+                    ssid = uiState.hotspotInfo.ssid ?: "",
                     password = uiState.hotspotInfo.password,
-                    canReadPassword = uiState.capabilities.canReadSsidAndPassword
                 )
             }
         }
@@ -280,7 +281,7 @@ private fun HotspotStatusCard(uiState: HomeUiState, onShareClick: () -> Unit) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
-            if (uiState.hotspotInfo.state == HotspotState.ENABLED) {
+            if (uiState.hotspotInfo.state == HotspotState.ENABLED && uiState.capabilities.canReadSsidAndPassword) {
                 IconButton(
                     onClick = onShareClick,
                     modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
@@ -312,10 +313,8 @@ private fun HotspotStatusCard(uiState: HomeUiState, onShareClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun QrSharingBottomSheet(ssid: String, password: String?, canReadPassword: Boolean) {
-    var manualPassword by remember { mutableStateOf("") }
-    val effectivePassword = if (canReadPassword) password else manualPassword
-    val qrBitmap = remember(ssid, effectivePassword) { QrGenerator.generateWifiQrCode(ssid, effectivePassword) }
+private fun QrSharingBottomSheet(ssid: String, password: String?) {
+    val qrBitmap = remember(ssid, password) { QrGenerator.generateWifiQrCode(ssid, password) }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 48.dp),
@@ -338,22 +337,7 @@ private fun QrSharingBottomSheet(ssid: String, password: String?, canReadPasswor
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(ssid, style = MaterialTheme.typography.titleLarge)
-            if (canReadPassword) {
-                Text("Sharing secure connection", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            } else {
-                androidx.compose.material3.OutlinedTextField(
-                    value = manualPassword,
-                    onValueChange = { manualPassword = it },
-                    label = { Text("Enter Hotspot Password") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-
-        OutlinedButton(onClick = { /* Share logic */ }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Share, null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Share Image")
+            Text("Sharing secure connection", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

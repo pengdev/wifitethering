@@ -1,6 +1,6 @@
 # Smart Hotspot Manager — Improvement Plan v2
 
-> Reviewed 2026-04-17. This document captures all known issues, API constraints,
+> Reviewed 2026-04-22. This document captures all known issues, API constraints,
 > and the phased plan to ship a production-quality release.
 
 ---
@@ -33,36 +33,37 @@ UI does **not** adapt — features that silently fail are still shown.
 
 ## Current Feature Status (Honest Assessment)
 
-| Feature                  | Free | Premium | Actual Status                                             |
-|--------------------------|------|---------|-----------------------------------------------------------|
-| One-tap hotspot toggle   | ✅   | ✅      | Works API <26 only; API 26+ opens system settings         |
-| Quick Settings Tile      | ✅   | ✅      | Working (fixed PendingIntent for API 34+)                 |
-| Session timer            | ✅   | ✅      | Working                                                   |
-| Connected devices list   | ✅   | ✅      | **BROKEN on API 29+** — `/proc/net/arp` returns empty     |
-| QR code sharing          | ✅   | ✅      | **Password is hardcoded** — QR won't actually connect     |
-| Banner ads               | ✅   | ❌      | Working (test IDs)                                        |
-| Interstitial ads         | ✅   | ❌      | Working (test IDs)                                        |
-| Data limit monitor       | ❌   | ✅      | **Fake** — uses `elapsed * 0.05` time proxy               |
-| Battery protector        | ❌   | ✅      | Working                                                   |
-| Hotspot scheduler        | ❌   | ✅      | Working (but buried 3 taps deep, invisible to free users) |
-| Hotspot config (SSID)    | ❌   | ✅      | **Only works API <26** — does nothing on modern phones    |
-| AMOLED theme             | ❌   | ✅      | Working                                                   |
-| Glass theme              | ❌   | ✅      | Built but **not exposed** in ThemePicker UI               |
-| Home screen widget       | ✅   | ✅      | Working                                                   |
-| Rating prompt            | ✅   | ✅      | Shows but positioned below fold on most screens           |
-| `onRequestUpgrade`       | —    | —       | **No-op** — tapping does nothing                          |
+| Feature                  | Free | Premium | Actual Status                                                           |
+|--------------------------|------|---------|-------------------------------------------------------------------------|
+| One-tap hotspot toggle   | ✅   | ✅      | Works API <26 only; API 26+ opens system settings (UI reflects this)   |
+| Quick Settings Tile      | ✅   | ✅      | Working (fixed PendingIntent for API 34+)                               |
+| Session timer            | ✅   | ✅      | Working                                                                 |
+| Connected devices list   | ✅   | ✅      | Hidden on API 29+ — feature removed from unsupported devices            |
+| QR code sharing          | ✅   | ✅      | Works on API <28; hidden on API 28+ where credentials are unreadable    |
+| Banner ads               | ✅   | ❌      | Working (test IDs)                                                      |
+| Interstitial ads         | ✅   | ❌      | Working (test IDs)                                                      |
+| Data limit monitor       | ❌   | ✅      | Working — real usage via `TrafficStats` delta (no permission needed)    |
+| Battery protector        | ❌   | ✅      | Working — checks every 15 min via WorkManager                           |
+| Hotspot scheduler        | ❌   | ✅      | Working; surfaced on home screen via Schedules chip                     |
+| Hotspot config (SSID)    | ❌   | ✅      | Hidden on API 26+ — feature removed where it cannot function            |
+| Material You colors      | ✅   | ✅      | Applied on API 31+ (dynamic color scheme from wallpaper)                |
+| Home screen widget       | ✅   | ✅      | Working                                                                 |
+| Rating prompt            | ✅   | ✅      | Triggers after 5th hotspot session as a dialog                          |
+| Upgrade flow             | —    | —       | Working — UpgradeBottomSheet with billing integration                   |
 
 ---
 
 ## Critical Issues (Must Fix Before Publishing)
 
-1. **`onRequestUpgrade` is a no-op** — the premium CTA does nothing
-2. **Connected devices is broken on API 29+** — empty list on modern phones
-3. **QR password is hardcoded** to `"Your_Password"`
-4. **Data usage is fake** — grows linearly with time regardless of traffic
-5. **Hotspot Config is sold as premium but fails silently on API 26+**
-6. **Glass theme built but unreachable** — not in ThemePicker
-7. **No limit adjustment UI** — sliders exist in ViewModel but not in UI
+~~1. **`onRequestUpgrade` is a no-op**~~ — Fixed (Phase 7.2)
+~~2. **Connected devices is broken on API 29+**~~ — Fixed: hidden on unsupported devices (Phase 7.5)
+~~3. **QR password is hardcoded**~~ — Fixed: QR removed on API 28+ (Phase 7.5)
+~~4. **Data usage is fake**~~ — Fixed: real `TrafficStats` delta (Phase 7.5)
+~~5. **Hotspot Config fails silently on API 26+**~~ — Fixed: hidden on unsupported devices (Phase 7.5)
+~~6. **Glass theme built but unreachable**~~ — Resolved: AMOLED/Glass themes dropped entirely (Phase 7.4)
+~~7. **No limit adjustment UI**~~ — Fixed: sliders added to HomeScreen (Phase 7.1)
+
+**No critical issues remain.**
 
 ---
 
@@ -86,29 +87,23 @@ Priority: **MUST DO before release**
 - Gate behind `isPremium` alongside AMOLED
 - Files: `SettingsScreen.kt`
 
-### 7.1.4 Fix QR password
-- Use `HotspotManager.readPassword()` on API <28 where it works
-- On API 28+: show a text input field in the QR sheet for user to type password
-- Store last-used password in DataStore for convenience
-- Files: `HomeScreen.kt`, `HomeViewModel.kt`, `PreferencesRepository.kt`
+### ~~7.1.4~~ Fix QR password — DONE
+- On API <28: QR uses `HotspotManager.readPassword()` and generates correct WiFi QR
+- On API 28+: QR button hidden entirely — credentials are unreadable without @SystemApi access
+- Fixed QR format: proper `T:nopass` when no password, special-character escaping
+- Files: `HomeScreen.kt`, `QrGenerator.kt`
 
-### 7.1.5 Fix or remove fake data usage
-- Option A: Implement `NetworkStatsManager` on API 26+ for real usage data
-  (requires `PACKAGE_USAGE_STATS` permission + user grant)
-- Option B (simpler): Remove the data monitor entirely; replace with
-  "Session duration" which is already accurate
-- Option C: Keep as "Estimated usage" with clear disclaimer text
-- Files: `HomeViewModel.kt`, `HomeScreen.kt`
+### ~~7.1.5~~ Fix or remove fake data usage — DONE
+- Replaced time-proxy with `TrafficStats.getTotalRxBytes() + getTotalTxBytes()` delta
+- Baseline captured at hotspot-on and persisted to DataStore (so background worker can use it too)
+- No permission required; works on all API levels; handles `UNSUPPORTED` (-1) gracefully
+- Files: `HomeViewModel.kt`, `PreferencesRepository.kt`, `HotspotMonitoringWorker.kt`
 
-### 7.1.6 Fix connected devices on modern Android
-- `/proc/net/arp` is restricted starting API 29 (Android 10)
-- Option A: Use `WifiManager.LocalOnlyHotspotCallback` (API 26+) or
-  `TetheringManager.getConnectedDevices()` (API 30+, hidden API)
-- Option B: Fall back to IP neighbor scanning via `ip neigh` command
-- Option C: If hotspot is on but scan returns empty, show a helpful message:
-  "Device detection is limited on Android 10+. Your hotspot is active and
-  sharing your connection."
-- Files: `DeviceScanner.kt`, `DevicesScreen.kt`
+### ~~7.1.6~~ Fix connected devices on modern Android — DONE
+- `TetheringManager` and `SoftApCallback` are both `@SystemApi` — unavailable to regular apps
+- Chosen approach: hide the feature entirely on API 29+ where `/proc/net/arp` is restricted
+- "Devices" chip on home screen gated on `canScanConnectedDevices` capability flag
+- Files: `DeviceScanner.kt`, `HomeScreen.kt`
 
 ---
 
@@ -144,35 +139,29 @@ Priority: **Revenue multiplier — do before aesthetic polish**
 
 Priority: **Polish — adds professional quality**
 
-### 7.3.1 API-adaptive feature visibility (CRITICAL)
+### ~~7.3.1~~ API-adaptive feature visibility — DONE
 
-Add a `DeviceCapabilities` data class to `HotspotManager`:
+`DeviceCapabilities` data class in `HotspotManager` drives all UI gating:
 
 ```kotlin
 data class DeviceCapabilities(
     val canToggleProgrammatically: Boolean,   // API < 26
-    val canReadSsid: Boolean,                 // API < 28
-    val canReadPassword: Boolean,             // API < 28
+    val canReadSsidAndPassword: Boolean,       // API < 28
     val canEditConfig: Boolean,               // API < 26
-    val canScanConnectedDevices: Boolean,     // API < 29 (reliable)
+    val canScanConnectedDevices: Boolean,     // API < 29 (reliable ARP)
     val canUseTile: Boolean,                  // API >= 24
-    val canUseNetworkStats: Boolean,          // API >= 26 + permission
     val needsNotificationPermission: Boolean, // API >= 33
-    val needsExactAlarmPermission: Boolean,   // API >= 33
 )
 ```
 
-Then use it to drive the UI:
-
-| Current Behavior                                       | Fixed Behavior                                                                     |
-|--------------------------------------------------------|------------------------------------------------------------------------------------|
-| "Hotspot Configuration" shown as premium on all devices | Only show on API <26. On API 26+ show "Open system hotspot settings" instead      |
-| QR sheet always shows password field                   | On API 28+ show text field for user to enter password manually                     |
-| Toggle button says "Turn On Hotspot" on all devices    | On API 26+ say "Open Hotspot Settings" to set correct user expectations            |
-| Quick Settings Tile tip never shown                    | On API 24+ show one-time "Add our Quick Settings Tile for faster access" prompt    |
-| Data Limit shows fake usage on all devices             | On API 26+ use `NetworkStatsManager` for real data; on API <26 show "Session time" |
-| Connected Devices always shown                         | On API 29+ show disclaimer or hide the feature                                     |
-| Scheduler uses exact alarms without checking           | On API 33+ check `canScheduleExactAlarms()` and guide user to grant permission     |
+| Feature                  | Guarded by               | Behavior on unsupported device              |
+|--------------------------|--------------------------|---------------------------------------------|
+| Programmatic toggle      | `canToggleProgrammatically` | Button opens system settings instead      |
+| QR code share button     | `canReadSsidAndPassword` | Hidden                                      |
+| Connected Devices chip   | `canScanConnectedDevices`| Hidden                                      |
+| Hotspot Configuration    | `canEditConfig`          | Hidden from Settings (both free and premium)|
+| Exact alarm warning      | `canScheduleExactAlarms` | Warning banner shown in SchedulerScreen     |
+| Notification permission  | `needsNotificationPermission` | Requested at runtime on API 33+        |
 
 ### 7.3.2 Conditional Smart Management
 - Only show the management section when hotspot is ON or limits are actively enabled
@@ -252,62 +241,35 @@ only reliable, non-reflection path on Android 10+.
 - Requires: `ACCESS_NETWORK_STATE` (already held); no new dangerous permissions
 - Files: `DeviceScanner.kt`, `DevicesViewModel.kt`, `DevicesScreen.kt`
 
-### 7.5.3 Real data usage via `NetworkStatsManager` (API 26+)
+### ~~7.5.3~~ Real data usage — DONE
 
-Replace the `elapsed * 0.05` time proxy with actual bytes from
-`NetworkStatsManager.querySummaryForDevice()` scoped to the hotspot network
-interface. This gives real uploaded/downloaded bytes for the session.
+`NetworkStatsManager` requires `PACKAGE_USAGE_STATS` which users must grant
+manually — impractical. Implemented `TrafficStats` delta instead:
 
-- On API 26+: query `NetworkStatsManager` using `ConnectivityManager` to get
-  the active tethering network interface
-- Requires: `READ_NETWORK_USAGE_HISTORY` (system) OR guide the user to grant
-  `PACKAGE_USAGE_STATS` via Settings deeplink (`ACTION_USAGE_ACCESS_SETTINGS`)
-- If permission not granted: show current "Estimated (time-based)" label with
-  a tappable "Enable real usage stats" link that opens the system settings page
-- On API <26: keep the time-based estimate with disclaimer
-- Files: `HomeViewModel.kt`, `HotspotManager.kt`, `HomeScreen.kt`,
-  `PreferencesRepository.kt`
+- `TrafficStats.getTotalRxBytes() + getTotalTxBytes()` — public API, no permission
+- Baseline captured at hotspot-on, persisted to DataStore (`traffic_session_baseline`)
+- `HotspotMonitoringWorker` reads the same baseline to check data limit independently
+- Handles `UNSUPPORTED` (-1) and device-reboot edge cases
+- Files: `HomeViewModel.kt`, `PreferencesRepository.kt`, `HotspotMonitoringWorker.kt`
 
-### 7.5.4 Material You dynamic colors (API 31+)
+### ~~7.5.4~~ Material You dynamic colors (API 31+) — DONE
 
-One-line change in `MainActivity.onCreate()`:
+- `dynamicDarkColorScheme()`/`dynamicLightColorScheme()` applied in `Theme.kt` on API 31+
+- Falls back to static `DarkColorScheme`/`LightColorScheme` on older devices
+- Files: `Theme.kt`
 
-```kotlin
-DynamicColors.applyToActivityIfAvailable(this)
-```
+### ~~7.5.5~~ Exact alarm permission guidance for Scheduler (API 33+) — DONE
 
-Makes the app adopt the user's wallpaper-derived color palette on Android 12+.
-No additional theme work needed — Material3 handles token mapping automatically.
-Add `com.google.android.material:material` dependency if not already present
-(likely already transitive via Compose Material3).
-
-- Gate with `Build.VERSION.SDK_INT >= Build.VERSION_CODES.S` check inside the
-  call or let `applyToActivityIfAvailable` handle it (it no-ops on older devices)
-- Files: `MainActivity.kt`, `build.gradle.kts` (ensure material dep)
-
-### 7.5.5 Exact alarm permission guidance for Scheduler (API 33+)
-
-The scheduler uses `AlarmManager.setExact()` which requires
-`SCHEDULE_EXACT_ALARM` permission on API 33+. Without it, alarms are
-inexact and may fire up to 15 minutes late — silently.
-
-- Before scheduling, check `AlarmManager.canScheduleExactAlarms()`
-- If false on API 33+: show an inline warning in `SchedulerScreen` with a
-  button that deep-links to `Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM`
-- Do not block the user from creating schedules — just warn them that timing
-  may be approximate until permission is granted
+- `SchedulerViewModel.canScheduleExactAlarms` checks `AlarmManager.canScheduleExactAlarms()` on API 31+
+- `ExactAlarmWarning` card shown in `SchedulerScreen` when permission missing
+- "Fix" button deep-links to `Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM`
 - Files: `SchedulerScreen.kt`, `SchedulerViewModel.kt`
 
-### 7.5.6 Predictive back gesture (API 33+)
+### ~~7.5.6~~ Predictive back gesture (API 33+) — DONE
 
-Replace any `onBackPressed()` usage with `OnBackInvokedCallback` registered
-via `OnBackInvokedDispatcher`. For Compose navigation, ensure
-`NavHost` handles back correctly with `predictiveBackProgress` if using
-`androidx.navigation:navigation-compose` 2.7+.
-
-- Audit `MainActivity` and any `BackHandler` composables for deprecated patterns
-- Add `android:enableOnBackInvokedCallback="true"` to `<application>` in manifest
-- Files: `AndroidManifest.xml`, `MainActivity.kt`, any screen with `BackHandler`
+- `android:enableOnBackInvokedCallback="true"` added to `<application>` in manifest
+- Compose `NavHost` handles back natively; no deprecated `onBackPressed()` usage
+- Files: `AndroidManifest.xml`
 
 ---
 

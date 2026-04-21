@@ -1,6 +1,7 @@
 package com.geminiapps.wifitethering.worker
 
 import android.content.Context
+import android.net.TrafficStats
 import androidx.hilt.work.HiltWorker
 import androidx.work.*
 import com.geminiapps.wifitethering.data.PreferencesRepository
@@ -44,12 +45,28 @@ class HotspotMonitoringWorker @AssistedInject constructor(
             return Result.success()
         }
 
-        // 📊 Check Data Limit
+        // Check Data Limit
         val dataEnabled = preferencesRepository.dataLimitEnabled.first()
-        val dataLimitMb = preferencesRepository.dataLimitMb.first()
-        // Here we'd use NetworkStatsManager for a real data check. 
-        // For now, we'll monitor the session time as a proxy or just the battery.
-        
+        if (dataEnabled) {
+            val dataLimitMb = preferencesRepository.dataLimitMb.first()
+            val baseline = preferencesRepository.trafficSessionBaseline.first()
+            if (baseline != -1L) {
+                val rx = TrafficStats.getTotalRxBytes()
+                val tx = TrafficStats.getTotalTxBytes()
+                if (rx != TrafficStats.UNSUPPORTED.toLong() && tx != TrafficStats.UNSUPPORTED.toLong()) {
+                    val sessionBytes = (rx + tx - baseline).coerceAtLeast(0)
+                    val sessionMb = (sessionBytes / (1024L * 1024L)).toInt()
+                    if (sessionMb >= dataLimitMb) {
+                        NotificationHelper.showLimitReachedNotification(
+                            context,
+                            "Data Limit Reached",
+                            "Session used ${sessionMb} MB (limit: ${dataLimitMb} MB). Tap to turn off."
+                        )
+                    }
+                }
+            }
+        }
+
         return Result.success()
     }
 

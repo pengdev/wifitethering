@@ -86,13 +86,15 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             if (!uiState.isPremium) {
-                PremiumUpgradeCard(onUpgrade = onUpgrade)
+                PremiumUpgradeCard(uiState = uiState, onUpgrade = onUpgrade)
             }
 
             if (uiState.isPremium) {
                 SectionLabel("Premium Features")
-                Button(onClick = onNavigateToConfig, modifier = Modifier.fillMaxWidth()) {
-                    Text("Hotspot Configuration")
+                if (uiState.canEditConfig) {
+                    Button(onClick = onNavigateToConfig, modifier = Modifier.fillMaxWidth()) {
+                        Text("Hotspot Configuration")
+                    }
                 }
                 Button(onClick = onNavigateToScheduler, modifier = Modifier.fillMaxWidth()) {
                     Text("Hotspot Scheduler")
@@ -101,7 +103,9 @@ fun SettingsScreen(
             } else {
                 SectionLabel("Premium Features")
                 LockedFeatureButton(label = "Hotspot Scheduler", onClick = onUpgrade)
-                LockedFeatureButton(label = "Hotspot Configuration", onClick = onUpgrade)
+                if (uiState.canEditConfig) {
+                    LockedFeatureButton(label = "Hotspot Configuration", onClick = onUpgrade)
+                }
                 HorizontalDivider()
             }
 
@@ -149,7 +153,12 @@ private fun LockedFeatureButton(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PremiumUpgradeCard(onUpgrade: () -> Unit) {
+private fun PremiumUpgradeCard(uiState: SettingsUiState, onUpgrade: () -> Unit) {
+    val description = buildString {
+        append("Remove ads, schedule hotspot reminders")
+        if (uiState.canEditConfig) append(", edit hotspot name/password")
+        append(", and battery-aware alerts.")
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -158,7 +167,7 @@ private fun PremiumUpgradeCard(onUpgrade: () -> Unit) {
             Text("Go Premium", style = MaterialTheme.typography.titleLarge)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Remove ads, schedule hotspot reminders, edit hotspot name/password, and battery-aware alerts.",
+                text = description,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

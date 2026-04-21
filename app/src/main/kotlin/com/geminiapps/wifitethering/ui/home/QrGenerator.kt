@@ -9,17 +9,30 @@ import java.util.EnumMap
 
 object QrGenerator {
     /**
-     * Generates a WiFi QR code string in the format:
-     * WIFI:S:<SSID>;T:<WPA|WEP|nopass>;P:<password>;;
+     * Generates a WiFi QR code using the mecard format:
+     * WIFI:S:<SSID>;T:<WPA|nopass>;P:<password>;;
+     *
+     * Special characters in SSID/password must be escaped with a backslash: \ ; , " :
      */
-    fun generateWifiQrCode(ssid: String, password: String?, securityType: String = "WPA"): Bitmap? {
-        val qrContent = "WIFI:S:$ssid;T:$securityType;P:${password ?: ""};;"
+    fun generateWifiQrCode(ssid: String, password: String?): Bitmap? {
+        val securityType = if (password.isNullOrEmpty()) "nopass" else "WPA"
+        val qrContent = buildString {
+            append("WIFI:S:")
+            append(escape(ssid))
+            append(";T:")
+            append(securityType)
+            if (!password.isNullOrEmpty()) {
+                append(";P:")
+                append(escape(password))
+            }
+            append(";;")
+        }
         return try {
             val size = 512
             val hints = EnumMap<EncodeHintType, Any>(EncodeHintType::class.java)
             hints[EncodeHintType.CHARACTER_SET] = "UTF-8"
             hints[EncodeHintType.MARGIN] = 1
-            
+
             val bitMatrix = QRCodeWriter().encode(qrContent, BarcodeFormat.QR_CODE, size, size, hints)
             val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
             for (x in 0 until size) {
@@ -29,8 +42,14 @@ object QrGenerator {
             }
             bitmap
         } catch (e: Exception) {
-            e.printStackTrace()
             null
         }
     }
+
+    private fun escape(value: String): String =
+        value.replace("\\", "\\\\")
+            .replace(";", "\\;")
+            .replace(",", "\\,")
+            .replace("\"", "\\\"")
+            .replace(":", "\\:")
 }

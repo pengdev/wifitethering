@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.geminiapps.wifitethering.ui.theme.AppTheme
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -49,6 +50,8 @@ class PreferencesRepository @Inject constructor(
         val HOTSPOT_ON_COUNT = intPreferencesKey("hotspot_on_count")
         val BATTERY_TRIAL_SESSIONS = intPreferencesKey("battery_trial_sessions")
         val HAS_SEEN_ONBOARDING = booleanPreferencesKey("has_seen_onboarding")
+        // Persisted so HotspotMonitoringWorker can compute TrafficStats delta without the app open
+        val TRAFFIC_SESSION_BASELINE = longPreferencesKey("traffic_session_baseline")
     }
 
     val isPremium: Flow<Boolean> = context.dataStore.data
@@ -91,6 +94,9 @@ class PreferencesRepository @Inject constructor(
 
     val hasSeenOnboarding: Flow<Boolean> = context.dataStore.data
         .map { it[Keys.HAS_SEEN_ONBOARDING] ?: false }
+
+    val trafficSessionBaseline: Flow<Long> = context.dataStore.data
+        .map { it[Keys.TRAFFIC_SESSION_BASELINE] ?: -1L }
 
     val userPreferences: Flow<UserPreferences> = combine(
         isPremium,
@@ -174,5 +180,13 @@ class PreferencesRepository @Inject constructor(
 
     suspend fun setHasSeenOnboarding(value: Boolean) {
         context.dataStore.edit { it[Keys.HAS_SEEN_ONBOARDING] = value }
+    }
+
+    suspend fun setTrafficSessionBaseline(bytes: Long) {
+        context.dataStore.edit { it[Keys.TRAFFIC_SESSION_BASELINE] = bytes }
+    }
+
+    suspend fun clearTrafficSessionBaseline() {
+        context.dataStore.edit { it.remove(Keys.TRAFFIC_SESSION_BASELINE) }
     }
 }
