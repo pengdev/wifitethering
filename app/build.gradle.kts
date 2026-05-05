@@ -42,6 +42,13 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Make res/values/strings.xml available to plain JVM unit tests via the classpath.
+    sourceSets {
+        getByName("test") {
+            resources.srcDir("src/main/res")
+        }
+    }
 }
 
 dependencies {
@@ -88,4 +95,9 @@ dependencies {
     implementation(libs.billing)
     implementation(libs.billing.ktx)
     implementation(libs.play.services.ads)
+
+    // Test
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
 }

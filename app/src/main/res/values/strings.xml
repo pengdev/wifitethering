@@ -6,6 +6,5 @@
     <!-- Replace with your actual Ad Unit IDs before publishing -->
     <string name="admob_banner_id">ca-app-pub-3940256099942544/6300978111</string>
     <string name="admob_interstitial_id">ca-app-pub-3940256099942544/1033173712</string>
-    <!-- Replace with your actual Play Billing product ID -->
-    <string name="premium_product_id">remove_ads_premium</string>
+    <string name="premium_product_id">premium_monthly</string>
 </resources>

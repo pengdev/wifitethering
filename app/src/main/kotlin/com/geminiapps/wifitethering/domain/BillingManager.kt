@@ -15,6 +15,8 @@ import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 import com.geminiapps.wifitethering.R
 import com.geminiapps.wifitethering.data.PreferencesRepository
+import com.geminiapps.wifitethering.domain.billing.determinePremiumStatus
+import com.geminiapps.wifitethering.domain.billing.filterUnacknowledged
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -119,25 +121,20 @@ class BillingManager @Inject constructor(
 
     private fun handlePurchases(purchases: List<Purchase>) {
         val premiumProductId = context.getString(R.string.premium_product_id)
-        val hasPremium = purchases.any { purchase ->
-            purchase.products.contains(premiumProductId) &&
-                purchase.purchaseState == Purchase.PurchaseState.PURCHASED
-        }
+        val hasPremium = determinePremiumStatus(purchases, premiumProductId)
 
         scope.launch {
             _isPremium.value = hasPremium
             preferencesRepository.setPremium(hasPremium)
 
-            // Acknowledge unacknowledged purchases
-            purchases
-                .filter { it.purchaseState == Purchase.PurchaseState.PURCHASED && !it.isAcknowledged }
-                .forEach { purchase ->
-                    billingClient.acknowledgePurchase(
-                        AcknowledgePurchaseParams.newBuilder()
-                            .setPurchaseToken(purchase.purchaseToken)
-                            .build()
-                    ) { _ -> /* acknowledgement is best-effort */ }
-                }
+            // Acknowledge unacknowledged purchases to avoid automatic refund
+            filterUnacknowledged(purchases).forEach { purchase ->
+                billingClient.acknowledgePurchase(
+                    AcknowledgePurchaseParams.newBuilder()
+                        .setPurchaseToken(purchase.purchaseToken)
+                        .build()
+                ) { _ -> /* acknowledgement is best-effort */ }
+            }
         }
     }
 }
