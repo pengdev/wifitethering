@@ -25,3 +25,8 @@ proguard/
 # Log Files
 *.log
 .worktrees/
+
+# Team config (signing secrets)
+.claude/settings.local.json
+*.jks
+*.keystore
