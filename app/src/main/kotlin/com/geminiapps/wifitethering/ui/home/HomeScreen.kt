@@ -347,7 +347,7 @@ private fun MainActionButton(uiState: HomeUiState, onToggleOrOpenSettings: () ->
     val isEnabled = uiState.hotspotInfo.state == HotspotState.ENABLED
     val label = when {
         uiState.capabilities.canToggleProgrammatically -> if (isEnabled) "Turn Off Hotspot" else "Turn On Hotspot"
-        else -> if (isEnabled) "Hotspot is Active" else "Enable Hotspot"
+        else -> if (isEnabled) "Hotspot is Active" else "Open Settings to Enable"
     }
 
     Button(
