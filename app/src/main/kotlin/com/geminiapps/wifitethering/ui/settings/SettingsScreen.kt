@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -181,11 +182,14 @@ private fun PremiumUpgradeCard(uiState: SettingsUiState, onUpgrade: () -> Unit) 
 
 @Composable
 private fun ThemePicker(currentTheme: AppTheme, onSelect: (AppTheme) -> Unit) {
-    val options = listOf(
-        AppTheme.SYSTEM to "System",
-        AppTheme.DARK to "Dark",
-        AppTheme.LIGHT to "Light",
-    )
+    val options = buildList {
+        add(AppTheme.SYSTEM to "System")
+        add(AppTheme.DARK to "Dark")
+        add(AppTheme.LIGHT to "Light")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(AppTheme.MATERIAL_YOU to "Material You")
+        }
+    }
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

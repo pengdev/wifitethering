@@ -37,25 +37,27 @@ private val LightColorScheme = lightColorScheme(
     onBackground = Color(0xFF1A1A1A),
 )
 
-enum class AppTheme { SYSTEM, DARK, LIGHT }
+enum class AppTheme { SYSTEM, DARK, LIGHT, MATERIAL_YOU }
 
 @Composable
 fun WifiTetheringTheme(
     appTheme: AppTheme = AppTheme.SYSTEM,
     content: @Composable () -> Unit,
 ) {
-    val useDark = when (appTheme) {
-        AppTheme.LIGHT -> false
-        AppTheme.DARK -> true
-        AppTheme.SYSTEM -> isSystemInDarkTheme()
-    }
-
     val context = LocalContext.current
-    val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // API 31+: use wallpaper-derived Material You colors
-        if (useDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else {
-        if (useDark) DarkColorScheme else LightColorScheme
+    val colorScheme = when {
+        appTheme == AppTheme.MATERIAL_YOU && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            if (isSystemInDarkTheme()) dynamicDarkColorScheme(context)
+            else dynamicLightColorScheme(context)
+        }
+        else -> {
+            val useDark = when (appTheme) {
+                AppTheme.LIGHT -> false
+                AppTheme.DARK -> true
+                AppTheme.SYSTEM, AppTheme.MATERIAL_YOU -> isSystemInDarkTheme()
+            }
+            if (useDark) DarkColorScheme else LightColorScheme
+        }
     }
 
     MaterialTheme(
