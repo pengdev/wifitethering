@@ -19,6 +19,7 @@ splashscreen = "1.0.1"
 zxing = "3.5.3"
 junit = "4.13.2"
 coroutinesTest = "1.9.0"
+robolectric = "4.13"
 mockk = "1.13.12"
 
 [libraries]
@@ -53,6 +54,7 @@ androidx-splashscreen = { group = "androidx.core", name = "core-splashscreen", v
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 
 [plugins]
