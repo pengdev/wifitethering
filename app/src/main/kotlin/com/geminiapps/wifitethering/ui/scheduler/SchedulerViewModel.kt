@@ -32,7 +32,7 @@ class SchedulerViewModel @Inject constructor(
      * On API 31+, exact alarms require SCHEDULE_EXACT_ALARM permission.
      * If false, alarms will fire inexactly (up to ~15 min late).
      */
-    val canScheduleExactAlarms: Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    val canScheduleExactAlarms: Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).canScheduleExactAlarms()
     } else {
         true

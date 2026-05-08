@@ -126,7 +126,7 @@ fun SchedulerScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (!canScheduleExactAlarms && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (!canScheduleExactAlarms && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 ExactAlarmWarning()
             }
             Box(modifier = Modifier.weight(1f)) {
