@@ -39,6 +39,7 @@ data class HomeUiState(
     val showRatingPrompt: Boolean = false,
     val showUpgradePrompt: Boolean = false,
     val showOnboarding: Boolean = false,
+    val shouldRequestNotificationPermission: Boolean = false,
     val dataLimitEnabled: Boolean = false,
     val dataLimitMb: Int = 1000,
     val batteryLimitEnabled: Boolean = false,
@@ -55,6 +56,7 @@ class HomeViewModel @Inject constructor(
 
     private val _sessionTick = MutableStateFlow(0L)
     private val _currentUsageMb = MutableStateFlow(0)
+    private val _notificationPermissionRequested = MutableStateFlow(false)
 
     /**
      * Baseline cumulative bytes at hotspot session start.
@@ -131,11 +133,12 @@ class HomeViewModel @Inject constructor(
         hotspotManager.hotspotInfo,
         _sessionTick,
         preferencesRepository.userPreferences,
-        _currentUsageMb,
-    ) { hotspotInfo, elapsed, prefs, usageMb ->
+        combine(_currentUsageMb, _notificationPermissionRequested) { usage, notifRequested -> usage to notifRequested },
+    ) { hotspotInfo, elapsed, prefs, (usageMb, notifRequested) ->
+        val caps = hotspotManager.capabilities()
         HomeUiState(
             hotspotInfo = hotspotInfo,
-            capabilities = hotspotManager.capabilities(),
+            capabilities = caps,
             canToggleProgrammatically = hotspotManager.canToggleProgrammatically(),
             sessionElapsedSeconds = elapsed,
             isPremium = prefs.isPremium,
@@ -144,6 +147,7 @@ class HomeViewModel @Inject constructor(
             showRatingPrompt = !prefs.hasRated && prefs.hotspotOnCount >= 5,
             showUpgradePrompt = !prefs.isPremium && prefs.hotspotOnCount >= 3 && prefs.hotspotOnCount % 5 == 0,
             showOnboarding = !prefs.hasSeenOnboarding,
+            shouldRequestNotificationPermission = caps.needsNotificationPermission && !notifRequested,
             dataLimitEnabled = prefs.dataLimitEnabled,
             dataLimitMb = prefs.dataLimitMb,
             batteryLimitEnabled = prefs.batteryLimitEnabled,
@@ -157,6 +161,10 @@ class HomeViewModel @Inject constructor(
             canToggleProgrammatically = hotspotManager.canToggleProgrammatically()
         ),
     )
+
+    fun onNotificationPermissionRequested() {
+        _notificationPermissionRequested.value = true
+    }
 
     fun onToggleOrOpenSettings() {
         if (hotspotManager.toggleOrOpenSettings()) {
